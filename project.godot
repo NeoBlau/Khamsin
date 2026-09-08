@@ -23,6 +23,7 @@ EventBus="*res://src/core/event_bus.gd"
 Settings="*res://src/core/settings.gd"
 SaveSystem="*res://src/core/save_system.gd"
 GameState="*res://src/core/game_state.gd"
+World="*res://src/world/world_map.gd"
 Telemetry="*res://src/core/telemetry.gd"
 SceneRouter="*res://src/core/scene_router.gd"
 

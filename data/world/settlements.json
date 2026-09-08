@@ -1,0 +1,113 @@
+[
+  {
+    "id": "mahatta",
+    "name": "Махатта",
+    "kind": "city",
+    "position": [-6200, 4100],
+    "radius": 420,
+    "faction": "guild",
+    "services": ["fuel", "repair", "market", "bunk", "guild", "clinic"],
+    "fuel_markup": 1.0,
+    "contract_slots": 6,
+    "known": true,
+    "description": "Единственный город на четыреста километров. Всё, что въезжает в эрг и выезжает из него, проходит через здешние весы."
+  },
+  {
+    "id": "ain_dhib",
+    "name": "Айн-Диб",
+    "kind": "oasis",
+    "position": [-1800, -3400],
+    "radius": 300,
+    "faction": "nomads",
+    "services": ["fuel", "repair", "market", "bunk"],
+    "fuel_markup": 1.35,
+    "contract_slots": 4,
+    "known": true,
+    "description": "Пальмы, вода и три семьи, которые помнят это место без единого дома. Заправка одна, зато круглосуточно."
+  },
+  {
+    "id": "bir_saqr",
+    "name": "Бир-Сакр",
+    "kind": "well",
+    "position": [900, 2600],
+    "radius": 180,
+    "faction": "nomads",
+    "services": ["fuel", "bunk"],
+    "fuel_markup": 1.7,
+    "contract_slots": 2,
+    "known": true,
+    "description": "Колодец, навес и бочка солярки. По местным меркам — перекрёсток."
+  },
+  {
+    "id": "qasr_rih",
+    "name": "Каср-Рих",
+    "kind": "outpost",
+    "position": [3900, -6100],
+    "radius": 260,
+    "faction": "company",
+    "services": ["fuel", "repair", "market", "bunk"],
+    "fuel_markup": 1.5,
+    "contract_slots": 4,
+    "description": "Застава на старой караванной тропе. Досматривают всех, кто едет с севера, и делают вид, что это формальность."
+  },
+  {
+    "id": "hufra",
+    "name": "Хуфра",
+    "kind": "mine",
+    "position": [6800, 1200],
+    "radius": 340,
+    "faction": "company",
+    "services": ["fuel", "repair", "market"],
+    "fuel_markup": 1.2,
+    "contract_slots": 5,
+    "description": "Карьер компании. Работает круглые сутки, платит день в день и не задаёт вопросов о том, что везут обратно."
+  },
+  {
+    "id": "nuqta_7",
+    "name": "Точка 7",
+    "kind": "station",
+    "position": [-4600, -7200],
+    "radius": 220,
+    "faction": "company",
+    "services": ["fuel", "clinic"],
+    "fuel_markup": 1.8,
+    "contract_slots": 3,
+    "description": "Научная станция: мачты, антенны и люди, которые каждый раз удивляются, что кто-то доехал."
+  },
+  {
+    "id": "sabkha_camp",
+    "name": "Лагерь на себхе",
+    "kind": "camp",
+    "position": [5200, 6400],
+    "radius": 240,
+    "faction": "nomads",
+    "services": ["fuel", "market", "bunk"],
+    "fuel_markup": 1.6,
+    "contract_slots": 3,
+    "description": "Соляная равнина, по которой можно ехать сто двадцать, пока корка держит. Лагерь стоит там, где она уже не держит."
+  },
+  {
+    "id": "wadi_farash",
+    "name": "Вади-Фараш",
+    "kind": "farm",
+    "position": [-7400, -600],
+    "radius": 280,
+    "faction": "nomads",
+    "services": ["fuel", "market", "bunk", "clinic"],
+    "fuel_markup": 1.4,
+    "contract_slots": 4,
+    "description": "Ферма в русле пересохшей реки. Раз в несколько лет русло вспоминает, зачем оно нужно, и ферму отстраивают заново."
+  },
+  {
+    "id": "mahjar",
+    "name": "Махджар",
+    "kind": "ruin",
+    "position": [2200, 8300],
+    "radius": 260,
+    "faction": "none",
+    "services": [],
+    "fuel_markup": 2.4,
+    "contract_slots": 1,
+    "description": "Станция, которую бросили, когда трассу увели южнее. Крыши целы, людей нет."
+  }
+]
