@@ -1,0 +1,9 @@
+# Godot: кеш импорта и всё, что из него следует. Пересобирается из исходников.
+.godot/
+/android/
+/build/
+/dist/
+export_presets.local.cfg
+
+# Отчёты стенда телеметрии.
+/telemetry/

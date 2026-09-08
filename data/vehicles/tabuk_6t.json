@@ -1,0 +1,192 @@
+{
+  "id": "tabuk_6t",
+  "name": "«Табук» 6Т",
+  "description": "Полноприводный трёхосник, переделанный в двухосный тягач ещё до вашего рождения. Медленный, прожорливый, чинится куском проволоки.",
+  "price": 0,
+  "body": {
+    "mass": 4200,
+    "center_of_mass": [
+      0.0,
+      0.18,
+      0.12
+    ],
+    "size": [
+      2.05,
+      1.15,
+      5.6
+    ],
+    "inertia": [
+      8200,
+      8900,
+      1700
+    ],
+    "cargo_mass_limit": 4200,
+    "cargo_volume_limit": 19.0,
+    "offset": [
+      0.0,
+      0.25,
+      0.0
+    ]
+  },
+  "wheels": [
+    {
+      "position": [
+        -0.95,
+        0.0,
+        -1.8
+      ],
+      "steered": true,
+      "driven": true,
+      "radius": 0.5,
+      "width": 0.32,
+      "inertia": 3.1,
+      "brake_bias": 0.62
+    },
+    {
+      "position": [
+        0.95,
+        0.0,
+        -1.8
+      ],
+      "steered": true,
+      "driven": true,
+      "radius": 0.5,
+      "width": 0.32,
+      "inertia": 3.1,
+      "brake_bias": 0.62
+    },
+    {
+      "position": [
+        -0.95,
+        0.0,
+        1.8
+      ],
+      "steered": false,
+      "driven": true,
+      "radius": 0.5,
+      "width": 0.32,
+      "inertia": 3.1,
+      "brake_bias": 0.38,
+      "handbrake": true
+    },
+    {
+      "position": [
+        0.95,
+        0.0,
+        1.8
+      ],
+      "steered": false,
+      "driven": true,
+      "radius": 0.5,
+      "width": 0.32,
+      "inertia": 3.1,
+      "brake_bias": 0.38,
+      "handbrake": true
+    }
+  ],
+  "suspension": {
+    "spring_rate": 120000,
+    "damper_bump": 7200,
+    "damper_rebound": 12400,
+    "travel": 0.32,
+    "rest_length": 0.42,
+    "bump_stop_rate": 700000,
+    "antiroll_front": 24000,
+    "antiroll_rear": 17000
+  },
+  "tire": {
+    "mu": 0.95,
+    "kappa_peak": 0.14,
+    "alpha_peak": 0.14,
+    "load_sensitivity": 0.22,
+    "nominal_load": 11000,
+    "relaxation_length": 0.4,
+    "pressure_min": 0.8,
+    "pressure_max": 3.2,
+    "pressure_nominal": 2.4
+  },
+  "engine": {
+    "idle_rpm": 700,
+    "max_rpm": 3800,
+    "redline_rpm": 3400,
+    "inertia": 0.68,
+    "friction": 28,
+    "bsfc": 212,
+    "fuel_density": 0.835,
+    "fuel_capacity": 180,
+    "cooling_capacity": 52,
+    "thermal_mass": 38,
+    "torque_curve": [
+      [
+        700,
+        300
+      ],
+      [
+        1000,
+        500
+      ],
+      [
+        1200,
+        620
+      ],
+      [
+        1600,
+        700
+      ],
+      [
+        2000,
+        690
+      ],
+      [
+        2400,
+        630
+      ],
+      [
+        2800,
+        540
+      ],
+      [
+        3200,
+        440
+      ],
+      [
+        3600,
+        330
+      ]
+    ]
+  },
+  "transmission": {
+    "gears": [
+      5.5,
+      3.2,
+      2.0,
+      1.4,
+      1.0,
+      0.78
+    ],
+    "reverse": 5.0,
+    "final_drive": 4.6,
+    "transfer_high": 1.0,
+    "transfer_low": 2.72,
+    "efficiency": 0.9,
+    "clutch_capacity": 1200,
+    "shift_time": 0.35,
+    "inertia": 0.16,
+    "diff_lock_open": 0.12,
+    "diff_lock_locked": 0.95
+  },
+  "brakes": {
+    "service": 6000,
+    "handbrake": 4200
+  },
+  "aero": {
+    "cd": 0.62,
+    "frontal_area": 4.4,
+    "side_area": 11.0,
+    "pressure_centre_height": 0.55
+  },
+  "steering": {
+    "max_angle": 0.62,
+    "speed_falloff": 0.62
+  }
+}

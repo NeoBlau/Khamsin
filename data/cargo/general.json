@@ -1,0 +1,65 @@
+[
+  {
+    "id": "water",
+    "name": "Питьевая вода",
+    "description": "Двадцатилитровые баллоны на паллете. Тяжело, дёшево, никто не спрашивает документов.",
+    "mass": 240, "volume": 0.9, "value": 180, "fragility": 0.05, "tags": ["bulk"]
+  },
+  {
+    "id": "fuel_drums",
+    "name": "Бочки с соляркой",
+    "description": "Двести литров в железе. Не курить, не ронять.",
+    "mass": 195, "volume": 0.28, "value": 340, "fragility": 0.35, "tags": ["hazard", "fuel"]
+  },
+  {
+    "id": "drill_parts",
+    "name": "Буровые запчасти",
+    "description": "Замковые соединения и долота. Уронишь — вмятина на кузове, а не на грузе.",
+    "mass": 420, "volume": 0.6, "value": 900, "fragility": 0.08, "tags": ["industrial"]
+  },
+  {
+    "id": "lab_glass",
+    "name": "Лабораторное стекло",
+    "description": "Ящики с колбами в стружке. Каждая кочка — это чей-то месяц работы.",
+    "mass": 60, "volume": 0.55, "value": 1400, "fragility": 0.95, "tags": ["fragile", "science"]
+  },
+  {
+    "id": "medicine",
+    "name": "Медикаменты",
+    "description": "Термоконтейнеры. Выше тридцати восьми — можно выбрасывать.",
+    "mass": 45, "volume": 0.35, "value": 1250, "fragility": 0.45, "heat_sensitivity": 0.85,
+    "decay_per_hour": 0.004, "tags": ["fragile", "cold", "priority"]
+  },
+  {
+    "id": "produce",
+    "name": "Овощи с фермы",
+    "description": "Ящики из оазиса. Портятся сами по себе, жара только ускоряет.",
+    "mass": 180, "volume": 1.1, "value": 220, "fragility": 0.3, "heat_sensitivity": 0.6,
+    "decay_per_hour": 0.012, "tags": ["perishable"]
+  },
+  {
+    "id": "electronics",
+    "name": "Электроника",
+    "description": "Промышленные контроллеры в пенопласте. Боятся тряски и пыли.",
+    "mass": 85, "volume": 0.5, "value": 2100, "fragility": 0.7, "tags": ["fragile", "valuable"]
+  },
+  {
+    "id": "cement",
+    "name": "Цемент",
+    "description": "Мешки по пятьдесят. Груз, который прощает всё, кроме воды.",
+    "mass": 500, "volume": 0.4, "value": 130, "fragility": 0.02, "tags": ["bulk", "heavy"]
+  },
+  {
+    "id": "livestock_feed",
+    "name": "Корма",
+    "description": "Прессованные брикеты. Объёмно и почти невесомо.",
+    "mass": 90, "volume": 1.6, "value": 150, "fragility": 0.05, "tags": ["bulk"]
+  },
+  {
+    "id": "unmarked_crate",
+    "name": "Ящик без маркировки",
+    "description": "Вам сказали не открывать. Вес не сходится с накладной.",
+    "mass": 130, "volume": 0.45, "value": 3200, "fragility": 0.5, "restricted": true,
+    "tags": ["restricted", "story"]
+  }
+]
