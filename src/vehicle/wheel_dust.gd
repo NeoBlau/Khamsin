@@ -36,31 +36,52 @@ func _ready() -> void:
 	var curve := Curve.new()
 	curve.add_point(Vector2(0.0, 0.4))
 	curve.add_point(Vector2(0.35, 1.0))
-	curve.add_point(Vector2(1.0, 2.4))
+	curve.add_point(Vector2(1.0, 2.0))
 	var scale_curve := CurveTexture.new()
 	scale_curve.curve = curve
 	_material.scale_curve = scale_curve
 
 	var gradient := Gradient.new()
-	gradient.set_color(0, Color(0.86, 0.76, 0.55, 0.55))
-	gradient.set_color(1, Color(0.80, 0.71, 0.52, 0.0))
+	gradient.set_color(0, Color(0.90, 0.81, 0.62, 0.42))
+	gradient.set_color(1, Color(0.84, 0.75, 0.56, 0.0))
 	var ramp := GradientTexture1D.new()
 	ramp.gradient = gradient
 	_material.color_ramp = ramp
 	process_material = _material
 
 	var mesh := QuadMesh.new()
-	mesh.size = Vector2(0.9, 0.9)
+	mesh.size = Vector2(0.75, 0.75)
 	var surface := StandardMaterial3D.new()
 	surface.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	surface.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	surface.blend_mode = BaseMaterial3D.BLEND_MODE_MIX
 	surface.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
 	surface.vertex_color_use_as_albedo = true
-	surface.albedo_color = Color(0.84, 0.75, 0.56)
+	surface.albedo_color = Color(0.86, 0.77, 0.58)
 	surface.disable_receive_shadows = true
+	# Без мягкой маски частица остаётся квадратом: за машиной летят не клубы
+	# пыли, а картонные коробки. Радиальный градиент дешевле любой текстуры и
+	# не требует ни одного файла.
+	surface.albedo_texture = _soft_blob()
 	mesh.material = surface
 	draw_pass_1 = mesh
+
+
+## Круглое мягкое пятно вместо текстуры.
+static func _soft_blob() -> GradientTexture2D:
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0, 0.45, 1.0])
+	gradient.colors = PackedColorArray([
+		Color(1.0, 1.0, 1.0, 1.0), Color(1.0, 1.0, 1.0, 0.55), Color(1.0, 1.0, 1.0, 0.0)
+	])
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.fill = GradientTexture2D.FILL_RADIAL
+	texture.fill_from = Vector2(0.5, 0.5)
+	texture.fill_to = Vector2(1.0, 0.5)
+	texture.width = 64
+	texture.height = 64
+	return texture
 
 
 ## Обновляется вместе с колесом: интенсивность считается из проскальзывания,

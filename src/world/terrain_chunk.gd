@@ -254,17 +254,30 @@ func setup(chunk_coordinate: Vector2i, size: float, material: Material) -> void:
 	add_child(_mesh_instance)
 
 
-func apply_data(data: Dictionary, chunk_lod: int, collision_cell: float, rock_mesh: Mesh) -> void:
+## Ставит посчитанные данные в сцену.
+##
+## `keep_collision` отделяет «коллизия не нужна» от «коллизия уже есть и её
+## пересчитывать незачем». Разница принципиальная: смена уровня детализации
+## происходит прямо под колёсами едущей машины, и если при этом заменить
+## HeightMapShape3D на новый, физика на кадр теряет опору. На ровном месте это
+## незаметно, на склоне дюны машина проваливается и переворачивается.
+func apply_data(
+	data: Dictionary,
+	chunk_lod: int,
+	collision_cell: float,
+	rock_mesh: Mesh,
+	keep_collision: bool = false
+) -> void:
 	lod = chunk_lod
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, data["surface"])
 	_mesh_instance.mesh = mesh
 
 	var heights: PackedFloat32Array = data["heights"]
-	if heights.is_empty():
-		_clear_collision()
-	else:
+	if not heights.is_empty():
 		_apply_collision(heights, int(data["collision_width"]), collision_cell)
+	elif not keep_collision:
+		_clear_collision()
 
 	_apply_scatter(data["scatter"], rock_mesh)
 

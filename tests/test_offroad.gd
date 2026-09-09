@@ -11,6 +11,7 @@ const STEP := 1.0 / 120.0
 var world: Node3D
 var truck: VehicleBody
 var field: TerrainField
+var _manager: TerrainManager
 
 
 func before_each() -> void:
@@ -36,6 +37,7 @@ func _spawn(x: float, z: float, heading: float, pressure: float = 2.0) -> void:
 	var manager := TerrainManager.new()
 	world.add_child(manager)
 	manager.field = field
+	_manager = manager
 
 	truck = VehicleBody.new()
 	truck.config_id = &"tabuk_6t"
@@ -48,6 +50,7 @@ func _spawn(x: float, z: float, heading: float, pressure: float = 2.0) -> void:
 		Basis(Vector3.UP, heading), Vector3(x, ground + 1.4, z)
 	)
 	truck.set_pressure_all(pressure)
+	manager.begin(field, truck)
 	manager.build_immediate(truck.global_position)
 	await simulate(2.5)
 
@@ -137,3 +140,27 @@ func test_gearbox_keeps_a_low_gear_in_sand() -> void:
 		truck.drivetrain.gear <= 4,
 		"в песке автомат не должен уходить на высшие передачи, стоит %d" % truck.drivetrain.gear
 	)
+
+
+func test_streaming_terrain_does_not_drop_the_truck() -> void:
+	# Игровая сцена, в отличие от голого стенда, подгружает и пересобирает
+	# чанки прямо под машиной. Проверяем, что от этого она не проваливается и
+	# не переворачивается: именно так выглядел баг с пересозданием коллизии
+	# при смене уровня детализации.
+	await _spawn(1200.0, -1100.0, 0.4, 1.8)
+	var worst_upright := 1.0
+	var deepest := 0.0
+	truck.input.throttle = 0.7
+	for _i: int in roundi(20.0 / STEP):
+		await tree().physics_frame
+		worst_upright = minf(worst_upright, truck.global_transform.basis.y.dot(Vector3.UP))
+		var ground := field.height(truck.global_position.x, truck.global_position.z)
+		deepest = maxf(deepest, ground - truck.global_position.y)
+	truck.input.throttle = 0.0
+
+	check_greater(worst_upright, 0.35, "машина не должна лечь набок за двадцать секунд езды")
+	check(
+		deepest < 1.5,
+		"и не должна уходить под поверхность: максимум на %.1f м ниже неё" % deepest
+	)
+	check_greater(float(_manager.loaded_chunk_count()), 8.0, "чанки должны подгружаться на ходу")

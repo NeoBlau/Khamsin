@@ -249,8 +249,11 @@ func _gradient_table() -> void:
 	for surface_id: StringName in [&"gravel", &"sand_firm", &"sand_soft"]:
 		var surface := Surface.get_by_id(surface_id)
 		var best := 0.0
-		for degrees: int in [5, 10, 15, 20, 25, 30]:
-			await _rebuild(deg_to_rad(-float(degrees)))
+		for degrees: int in [10, 15, 20, 25, 30, 35, 40]:
+			# Знак положительный: поворот вокруг X опускает +Z и поднимает -Z,
+			# а машина едет именно в -Z. С обратным знаком стенд честно мерил
+			# спуск и уверенно рапортовал про сорок градусов по рыхлому песку.
+			await _rebuild(deg_to_rad(float(degrees)))
 			await _reset(surface_id, 1.6)
 			var start := _truck.global_position
 			_truck.drivetrain.low_range = true
@@ -258,9 +261,11 @@ func _gradient_table() -> void:
 			_truck.input.throttle = 1.0
 			await _wait(12.0)
 			_truck.input.throttle = 0.0
-			# Считаем взятым подъём, на который машина заехала хотя бы на
-			# десять метров: буксовать на месте она умеет на любом уклоне.
-			if start.distance_to(_truck.global_position) > 6.0:
+			# Считаем взятым подъём, на котором машина реально набрала высоту.
+			# Пройденное расстояние тут не годится: сползая назад, она проходит
+			# его ничуть не хуже, и стенд честно рапортует про сорок градусов
+			# по рыхлому песку.
+			if _truck.global_position.y - start.y > 4.0:
 				best = float(degrees)
 			else:
 				break
@@ -270,6 +275,9 @@ func _gradient_table() -> void:
 
 ## Полный заезд с записью в CSV: по нему видно форму кривой, а не только точки.
 func _record_run() -> void:
+	# Обязательно на ровной земле: предыдущий замер оставил основание
+	# наклонённым, и заезд под уклон дал бы двести шестьдесят километров в час.
+	await _rebuild(0.0)
 	await _reset(&"gravel", 2.2)
 	Telemetry.begin(PackedStringArray([
 		"time", "speed_kmh", "rpm", "gear", "throttle", "slip_front", "load_front", "fuel_l"

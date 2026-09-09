@@ -156,7 +156,7 @@ func update_tire(
 	# Глубже половины радиуса колесо не уходит: дальше в грунт упирается мост, и
 	# это уже не качение, а сидение на брюхе. Без ограничения формула на
 	# предельных нагрузках выдаёт метровую просадку, и машина встаёт намертво.
-	sinkage = minf(TireModel.sinkage(surface, load, patch_area), spec.radius * 0.55)
+	sinkage = minf(TireModel.sinkage(surface, load, patch_area), spec.radius * 0.75)
 
 	var wheel_speed := angular_velocity * rolling_radius()
 	var reference := maxf(absf(contact_speed_long), TireModel.CREEP_SPEED)

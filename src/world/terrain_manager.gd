@@ -17,6 +17,8 @@ const MAX_JOBS := 6
 ## Сколько готовых чанков разрешено собрать за один кадр. Ограничение против
 ## рывка при въезде в новую область.
 const MAX_APPLY_PER_FRAME := 2
+## Сколько разрешено собрать, когда под игроком ещё нет твёрдой земли.
+const MAX_APPLY_URGENT := 8
 
 @export var target: Node3D
 
@@ -130,8 +132,13 @@ func _refresh_desired(centre: Vector2i) -> void:
 		_chunks.erase(coordinate)
 		chunk.queue_free()
 	_queue = _queue.filter(func(c: Vector2i) -> bool: return wanted.has(c))
+	# Сначала то, что держит машину, потом всё остальное по близости.
 	_queue.sort_custom(
 		func(a: Vector2i, b: Vector2i) -> bool:
+			var a_urgent := _needs_collision(a, centre)
+			var b_urgent := _needs_collision(b, centre)
+			if a_urgent != b_urgent:
+				return a_urgent
 			var flat := Vector2(from.x, from.z)
 			return chunk_centre(a).distance_squared_to(flat) < chunk_centre(b).distance_squared_to(flat)
 	)
@@ -146,7 +153,11 @@ func _start_jobs() -> void:
 	while _jobs.size() < MAX_JOBS and not _queue.is_empty():
 		var coordinate: Vector2i = _queue.pop_front()
 		var level := lod_for(coordinate, target.global_position)
-		var wants_collision := _needs_collision(coordinate, _last_centre)
+		# Считать сетку коллизии заново, если она уже стоит, не нужно: рельеф
+		# не меняется, а замена формы под машиной роняет её сквозь землю.
+		var existing: TerrainChunk = _chunks.get(coordinate)
+		var has_collision := existing != null and existing.has_collision
+		var wants_collision := _needs_collision(coordinate, _last_centre) and not has_collision
 		var task := WorkerThreadPool.add_task(
 			_build_job.bind(coordinate, level, wants_collision), true, "Ландшафт %s" % coordinate
 		)
@@ -175,8 +186,12 @@ func _build_job(coordinate: Vector2i, level: int, wants_collision: bool) -> void
 
 func _collect_results() -> void:
 	var applied := 0
+	# Пока под игроком нет коллизии, бюджет на сборку не действует. На низком
+	# кадре два чанка в кадр — это секунды, за которые машина успевает доехать
+	# до края построенной земли и провалиться.
+	var budget := MAX_APPLY_PER_FRAME if _collision_ready() else MAX_APPLY_URGENT
 	for coordinate: Vector2i in _jobs.keys():
-		if applied >= MAX_APPLY_PER_FRAME:
+		if applied >= budget:
 			break
 		var task: int = _jobs[coordinate]
 		if not WorkerThreadPool.is_task_completed(task):
@@ -200,19 +215,29 @@ func _install(coordinate: Vector2i, data: Dictionary) -> void:
 		chunk.setup(coordinate, chunk_size, _material)
 		add_child(chunk)
 		_chunks[coordinate] = chunk
-	chunk.apply_data(data, int(data["lod"]), collision_cell, _rock_mesh)
+	chunk.apply_data(
+		data, int(data["lod"]), collision_cell, _rock_mesh, _needs_collision(coordinate, _last_centre)
+	)
 
 
-## Готов ли ландшафт под игроком. По этому сигналу мир снимает загрузочный экран
-## и отпускает машину — иначе она успевает провалиться сквозь несобранную землю.
-func _check_ready(centre: Vector2i) -> void:
-	if _announced_ready:
-		return
+## Есть ли твёрдая земля во всём ближнем кольце вокруг игрока.
+func _collision_ready() -> bool:
+	if target == null or not is_instance_valid(target):
+		return true
+	var centre := world_to_chunk(target.global_position)
 	for j: int in range(centre.y - collision_radius, centre.y + collision_radius + 1):
 		for i: int in range(centre.x - collision_radius, centre.x + collision_radius + 1):
 			var chunk: TerrainChunk = _chunks.get(Vector2i(i, j))
 			if chunk == null or not chunk.has_collision:
-				return
+				return false
+	return true
+
+
+## Готов ли ландшафт под игроком. По этому сигналу мир снимает загрузочный экран
+## и отпускает машину — иначе она успевает провалиться сквозь несобранную землю.
+func _check_ready(_centre: Vector2i) -> void:
+	if _announced_ready or not _collision_ready():
+		return
 	_announced_ready = true
 	initial_chunks_ready.emit()
 

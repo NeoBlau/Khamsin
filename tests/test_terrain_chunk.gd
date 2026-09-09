@@ -263,3 +263,32 @@ func _first_triangle_normal(arrays: Array) -> Vector3:
 
 func _triangle_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
 	return (b - a).cross(c - a).normalized()
+
+
+func test_changing_lod_keeps_the_collision_under_the_wheels() -> void:
+	# Уровень детализации меняется прямо под едущей машиной. Если при этом
+	# пересоздавать форму коллизии, физика на кадр теряет опору: на ровном
+	# месте незаметно, на склоне дюны машина проваливается и переворачивается.
+	world = Node3D.new()
+	host.add_child(world)
+
+	var chunk := TerrainChunk.new()
+	chunk.setup(Vector2i.ZERO, SIZE, null)
+	world.add_child(chunk)
+
+	var detailed := TerrainChunk.build_data(field, Vector2.ZERO, SIZE, 128, CELL, true, false, SEED)
+	chunk.apply_data(detailed, 0, CELL, null, true)
+	check(chunk.has_collision, "сначала коллизия должна появиться")
+	var shape := chunk.get_node("Ground/CollisionShape3D") as CollisionShape3D
+	var first := shape.shape
+
+	# Тот же чанк на грубой сетке и без пересчёта коллизии.
+	var coarse := TerrainChunk.build_data(field, Vector2.ZERO, SIZE, 16, CELL, false, false, SEED)
+	chunk.apply_data(coarse, 3, CELL, null, true)
+	check(chunk.has_collision, "после смены детализации коллизия должна остаться")
+	check(shape.shape == first, "и остаться той же самой формой, а не пересозданной")
+	check_equal(chunk.lod, 3, "визуальный уровень при этом меняется")
+
+	# А вот когда чанк уезжает из ближнего кольца, коллизию надо убрать.
+	chunk.apply_data(coarse, 4, CELL, null, false)
+	check(not chunk.has_collision, "вдали от игрока коллизия должна сниматься")

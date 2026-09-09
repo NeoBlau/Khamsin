@@ -141,6 +141,25 @@ func _process(delta: float) -> void:
 		_poll_timer = 0.0
 		_check_settlement()
 		_auto_headlights()
+		_catch_falls()
+
+
+## Страховка от провала сквозь мир.
+##
+## Ландшафт подгружается кусками, и на слабой машине или при телепорте игрок
+## может оказаться там, где коллизия ещё не собралась. Падение в пустоту —
+## худший из возможных багов: игра не сломана, но играть в неё нельзя.
+## Проверка стоит один вызов height() в полсекунды.
+func _catch_falls() -> void:
+	var ground := World.height(vehicle.global_position.x, vehicle.global_position.z)
+	if vehicle.global_position.y > ground - 6.0:
+		return
+	push_warning("Машина провалилась под ландшафт, возвращаю на поверхность")
+	vehicle.linear_velocity = Vector3.ZERO
+	vehicle.angular_velocity = Vector3.ZERO
+	vehicle.global_position = Vector3(
+		vehicle.global_position.x, ground + 1.5, vehicle.global_position.z
+	)
 
 
 func _unhandled_input(event: InputEvent) -> void:
