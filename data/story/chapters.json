@@ -1,0 +1,76 @@
+[
+  {
+    "id": "inheritance",
+    "title": "Наследство",
+    "objective": "Заработать на первый взнос по долгу и внести его в Махатте",
+    "on_start": { "set_flag": "chapter_inheritance" },
+    "complete_when": { "flag": "debt_first_paid" },
+    "next": "the_crate",
+    "beats": [
+      {
+        "id": "intro",
+        "when": { "settlement": "mahatta" },
+        "objective": "Зайти на биржу в Махатте и взять заказ",
+        "then": { "dialogue": "intro_dispatcher" }
+      },
+      {
+        "id": "after_first_run",
+        "when": { "all": [{ "flag": "met_dispatcher" }, { "deliveries_at_least": 1 }] },
+        "objective": "Сдать первый груз",
+        "then": {
+          "dialogue": "after_first_run",
+          "reputation": { "faction": "guild", "amount": 3 }
+        }
+      },
+      {
+        "id": "debt_pressure",
+        "when": { "all": [{ "flag": "met_dispatcher" }, { "day_at_least": 4 }] },
+        "then": { "notify": "Гильдия напомнила о взносе. Осталось четыре дня." }
+      },
+      {
+        "id": "stranger",
+        "when": {
+          "all": [
+            { "deliveries_at_least": 2 },
+            { "settlement": "bir_saqr" },
+            { "not_flag": "met_stranger" }
+          ]
+        },
+        "then": { "dialogue": "stranger_offer" }
+      },
+      {
+        "id": "pay_debt",
+        "when": {
+          "all": [
+            { "settlement": "mahatta" },
+            { "money_at_least": 6000 },
+            { "flag": "met_dispatcher" },
+            { "not_flag": "debt_first_paid" }
+          ]
+        },
+        "objective": "Собрать 6000 дх и вернуться в Махатту",
+        "then": { "dialogue": "pay_first_instalment" }
+      }
+    ]
+  },
+  {
+    "id": "the_crate",
+    "title": "Что в ящике",
+    "objective": "Разобраться, что везли в ящике без маркировки",
+    "complete_when": { "flag": "crate_resolved" },
+    "next": "",
+    "beats": [
+      {
+        "id": "crate_delivered",
+        "when": { "flag": "crate_delivered" },
+        "objective": "Довезти ящик до Точки 7",
+        "then": { "dialogue": "crate_aftermath" }
+      },
+      {
+        "id": "company_notices",
+        "when": { "all": [{ "flag": "crate_delivered" }, { "settlement": "hufra" }] },
+        "then": { "dialogue": "company_notices" }
+      }
+    ]
+  }
+]
