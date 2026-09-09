@@ -65,7 +65,10 @@ var _distance_since_sync: float = 0.0
 
 func _ready() -> void:
 	Catalog.ensure_loaded()
-	config = Catalog.vehicle(config_id)
+	var base := Catalog.vehicle(config_id)
+	# Купленное оборудование меняет характеристики. Правится копия: конфигурация
+	# из справочника общая, и менять её значило бы менять все машины сразу.
+	config = Upgrades.configure(base) if player_controlled and base != null else base
 	if config == null:
 		push_error("VehicleBody: нет конфигурации '%s'" % config_id)
 		set_physics_process(false)

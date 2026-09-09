@@ -16,6 +16,9 @@ var camera: VehicleCamera
 var terrain: TerrainManager
 var sky: SkyController
 var weather: Weather
+var story: StoryDirector
+var cargo: CargoMonitor
+var hud: CanvasLayer
 
 var _loading: Control
 var _poll_timer: float = 0.0
@@ -58,6 +61,17 @@ func _on_world_built() -> void:
 
 	_spawn_vehicle()
 
+	cargo = CargoMonitor.new()
+	cargo.name = "CargoMonitor"
+	cargo.weather = weather
+	cargo.vehicle = vehicle
+	add_child(cargo)
+
+	story = StoryDirector.new()
+	story.name = "Story"
+	story.add_to_group(&"story_director")
+	add_child(story)
+
 	camera = VehicleCamera.new()
 	camera.name = "Camera"
 	camera.base_fov = Settings.fov
@@ -69,6 +83,13 @@ func _on_world_built() -> void:
 	terrain.begin(World.field, vehicle)
 	terrain.build_immediate(vehicle.global_position)
 
+	hud = load("res://scenes/ui/hud.tscn").instantiate()
+	hud.name = "Hud"
+	add_child(hud)
+	hud.setup(vehicle, weather, story)
+
+	EventBus.dialogue_requested.connect(_on_dialogue_requested)
+
 	_hide_loading()
 	is_world_ready = true
 	world_ready.emit()
@@ -78,6 +99,7 @@ func _on_world_built() -> void:
 func _spawn_vehicle() -> void:
 	vehicle = VehicleBody.new()
 	vehicle.name = "Vehicle"
+	vehicle.add_to_group(&"player_vehicle")
 	vehicle.config_id = GameState.vehicle_id
 	vehicle.player_controlled = true
 	vehicle.surface_provider = World.surface_at
@@ -164,6 +186,12 @@ func _check_settlement() -> void:
 
 func current_settlement() -> Settlement:
 	return World.settlement(_current_settlement) if _current_settlement != &"" else null
+
+
+## Разговор всегда поверх всего и всегда на паузе: пропустить реплику, потому
+## что в этот момент машину сносило с дюны, — плохой опыт.
+func _on_dialogue_requested(dialogue_id: StringName) -> void:
+	EventBus.screen_requested.emit(&"dialogue", {"dialogue": String(dialogue_id)})
 
 
 func _interact() -> void:

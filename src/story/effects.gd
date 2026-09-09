@@ -73,7 +73,8 @@ static func _offer_contract(spec: Dictionary, _context: Dictionary) -> void:
 	contract.deposit = float(spec.get("deposit", 0.0))
 	contract.offered_at_hours = GameState.total_hours()
 	contract.expires_at_hours = contract.offered_at_hours + float(spec.get("expires_in", 96.0))
-	contract.deadline_hours = contract.offered_at_hours + float(spec.get("hours", 24.0))
+	contract.duration_hours = float(spec.get("hours", 24.0))
+	contract.deadline_hours = contract.offered_at_hours + contract.duration_hours
 	for flag: Variant in spec.get("flags", []):
 		contract.flags.append(StringName(flag))
 

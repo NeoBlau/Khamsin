@@ -7,7 +7,9 @@ extends RefCounted
 ## позволяет перебрать удачный заказ — это осознанное решение, а не экономия.
 
 ## Средняя маршевая скорость, по которой считается срок доставки, м/с.
-const CRUISE_SPEED := 11.0
+## По бездорожью маршевая скорость гружёного грузовика — около двадцати пяти
+## километров в час. Оптимистичная оценка здесь означает невыполнимые сроки.
+const CRUISE_SPEED := 7.0
 ## Сколько дней предложение висит на доске.
 const OFFER_LIFETIME_DAYS := 2
 
@@ -125,9 +127,12 @@ static func _make(
 	contract.route_length = route_length
 	contract.offered_at_hours = float(day - 1) * GameState.HOURS_PER_DAY + 6.0
 	contract.expires_at_hours = contract.offered_at_hours + float(OFFER_LIFETIME_DAYS) * 24.0
-	contract.deadline_hours = contract.offered_at_hours + travel_hours * float(urgency[1]) + 4.0
+	# Срок хранится длительностью, а не датой: отсчёт начинается с приёмки груза.
+	# Иначе заказ, взятый вечером, оказывается просроченным в момент погрузки.
+	contract.duration_hours = travel_hours * float(urgency[1]) + 3.0
+	contract.deadline_hours = contract.offered_at_hours + contract.duration_hours
 	contract.payout = _payout(cargo, units, route_length, float(urgency[2]))
-	contract.deposit = snappedf(cargo.value * float(units) * 0.12, 5.0)
+	contract.deposit = snappedf(cargo.value * float(units) * Config.contract_deposit_rate, 5.0)
 	if urgency_index > 0:
 		contract.flags.append(&"urgent")
 	if cargo.restricted:
@@ -173,15 +178,18 @@ static func _pick_cargo(
 	return Rng.pick_weighted(items, weights, rng)
 
 
+## Гонорар складывается из двух частей: за километры с поправкой на массу и
+## доли от стоимости груза. Только по километрам возить дорогое стекло было бы
+## так же выгодно, как цемент, и вся разница между грузами исчезла бы.
 static func _payout(cargo: CargoType, units: int, route_length: float, urgency: float) -> float:
 	var kilometres := route_length / 1000.0
 	var tonnes := cargo.mass * float(units) / 1000.0
-	var base := Config.contract_rate_per_km * kilometres
-	var mass_factor := 1.0 + tonnes * 0.22
+	var distance_part := Config.contract_rate_per_km * kilometres * (1.0 + tonnes * 0.22)
+	var value_part := cargo.value * float(units) * Config.contract_value_rate
 	var risk := 1.0 + cargo.fragility * 0.65 + cargo.heat_sensitivity * 0.35
 	if cargo.restricted:
 		risk += 0.9
-	return snappedf(base * mass_factor * risk * urgency, 5.0)
+	return snappedf((distance_part + value_part) * risk * urgency, 5.0)
 
 
 static func _issuer_name(origin: Settlement, rng: RandomNumberGenerator) -> String:

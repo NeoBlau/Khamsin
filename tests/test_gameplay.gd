@@ -218,3 +218,59 @@ func test_tire_upgrade_widens_the_wheels_of_the_copy() -> void:
 	var tuned := Upgrades.configure(base)
 	check_greater(tuned.wheels[0].width, original_width, "песчаные шины шире")
 	check_near(base.wheels[0].width, original_width, 0.0001, "оригинал не тронут")
+
+
+func test_offers_on_one_board_are_all_different() -> void:
+	# Ловушка перемешивания: если генератор слотов склеивает соседние номера,
+	# доска показывает одинаковые заказы парами, и это выглядит как баг данных.
+	for settlement: Settlement in World.settlements:
+		var seen: Dictionary[String, bool] = {}
+		for contract: Contract in ContractGenerator.offers_for(settlement, 2):
+			var signature := "%s|%d|%s" % [contract.cargo_id, contract.units, contract.destination_id]
+			check(
+				not seen.has(signature),
+				"%s: два одинаковых предложения на одной доске (%s)" % [settlement.id, signature]
+			)
+			seen[signature] = true
+			if not failures.is_empty():
+				return
+
+
+func test_taking_a_job_is_worth_more_than_its_deposit() -> void:
+	for day: int in range(1, 5):
+		for settlement: Settlement in World.settlements:
+			for contract: Contract in ContractGenerator.offers_for(settlement, day):
+				check(
+					contract.payout > contract.deposit * 1.15,
+					"%s: гонорар %.0f не покрывает залог %.0f"
+						% [contract.id, contract.payout, contract.deposit]
+				)
+				if not failures.is_empty():
+					return
+
+
+func test_the_clock_starts_when_the_load_does() -> void:
+	# Заказ, взятый вечером, не должен оказаться просроченным при погрузке.
+	GameState.time_of_day = 21.0
+	var contract := ContractGenerator.offers_for(_origin(), 1)[0]
+	ContractBoard.accept(contract, null)
+	var left := contract.hours_left(GameState.total_hours())
+	check_near(left, contract.duration_hours, 0.01, "с момента приёмки даётся полный срок")
+	check_greater(left, 1.0, "и этого срока хватает, чтобы вообще выехать")
+
+
+func test_deadlines_allow_a_realistic_pace() -> void:
+	# Срок должен быть достижим на разумной скорости по бездорожью, но не
+	# бесконечным: иначе спешка перестаёт что-либо значить.
+	for contract: Contract in ContractGenerator.offers_for(_origin(), 2):
+		var kilometres := contract.route_length / 1000.0
+		var needed := kilometres / 25.0
+		check_greater(
+			contract.duration_hours, needed,
+			"%s: %.1f ч на %.1f км — не доехать" % [contract.id, contract.duration_hours, kilometres]
+		)
+		check(
+			contract.duration_hours < needed * 8.0 + 6.0,
+			"%s: %.1f ч на %.1f км — срок ни на что не влияет"
+				% [contract.id, contract.duration_hours, kilometres]
+		)

@@ -315,10 +315,20 @@ func _update_automatic(input: VehicleInput, speed: float) -> void:
 	var up_rpm := config.redline_rpm * 0.88
 	var down_rpm := config.idle_rpm * 1.75
 
-	if gear < config.top_gear() and current_rpm > up_rpm and input.brake < 0.1:
+	# Переключаться только по оборотам нельзя. На песке колёса буксуют, обороты
+	# лезут вверх при стоящей машине, и автомат уходит на шестую, где момента
+	# нет вовсе. Поэтому вверх — лишь если машина действительно едет достаточно
+	# быстро, чтобы на следующей передаче не свалиться ниже оборотов холостого.
+	var speed_ok := absf(speed) > speed_at_rpm(down_rpm, gear + 1) * 0.92
+	if gear < config.top_gear() and current_rpm > up_rpm and input.brake < 0.1 and speed_ok:
 		_begin_shift(gear + 1)
 		return
 	if gear > 1 and current_rpm < down_rpm:
+		_begin_shift(gear - 1)
+		return
+	# И обратно: если скорость упала настолько, что передача уже не тянет,
+	# вниз идём даже когда обороты держит буксующее колесо.
+	if gear > 1 and absf(speed) < speed_at_rpm(config.idle_rpm * 1.15, gear):
 		_begin_shift(gear - 1)
 		return
 	# Кикдаун: полный газ на низких оборотах — вниз, даже если обороты в норме.

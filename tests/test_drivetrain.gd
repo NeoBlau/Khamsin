@@ -172,3 +172,31 @@ func test_engine_stalls_when_load_kills_revs() -> void:
 	input.ignition = true
 	drivetrain.update(1.0 / 120.0, input, 0.0)
 	check(drivetrain.running, "стартер должен заводить обратно")
+
+
+func test_automatic_does_not_climb_gears_on_spinning_wheels() -> void:
+	# Классическая ловушка автомата во внедорожной игре: колёса буксуют в песке,
+	# обороты высокие, машина стоит — и коробка уходит на высшую передачу, где
+	# момента нет и выехать уже невозможно.
+	input.throttle = 1.0
+	for _i: int in 1200:
+		for wheel: VehicleWheel in wheels:
+			wheel.angular_velocity = 90.0
+		drivetrain.update(1.0 / 120.0, input, 0.6)
+	check(
+		drivetrain.gear <= 2,
+		"при стоящей машине автомат не должен уходить выше второй, получили %d" % drivetrain.gear
+	)
+
+
+func test_automatic_downshifts_when_speed_drops() -> void:
+	input.throttle = 1.0
+	var speed := 26.0
+	for i: int in 1800:
+		speed = 26.0 if i < 900 else 3.0
+		for wheel: VehicleWheel in wheels:
+			wheel.angular_velocity = speed / wheel.spec.radius
+		drivetrain.update(1.0 / 120.0, input, speed)
+		if i == 899:
+			check_greater(float(drivetrain.gear), 2.0, "на скорости должна стоять высокая передача")
+	check(drivetrain.gear <= 2, "после падения скорости автомат обязан уйти вниз")

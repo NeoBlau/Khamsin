@@ -20,8 +20,11 @@ enum State { OFFERED, ACTIVE, DELIVERED, FAILED, EXPIRED }
 @export var payout: float = 0.0
 ## Залог, который курьер вносит при приёмке и получает назад с грузом.
 @export var deposit: float = 0.0
-## Абсолютное игровое время в часах, к которому груз ждут.
+## Абсолютное игровое время в часах, к которому груз ждут. Назначается в момент
+## приёмки: до этого срок хранится длительностью в `duration_hours`.
 @export var deadline_hours: float = 0.0
+## Сколько часов даётся на рейс с момента погрузки.
+@export var duration_hours: float = 8.0
 @export var offered_at_hours: float = 0.0
 ## До какого часа предложение висит на доске.
 @export var expires_at_hours: float = 0.0
@@ -109,6 +112,7 @@ func to_dict() -> Dictionary:
 		"payout": payout,
 		"deposit": deposit,
 		"deadline_hours": deadline_hours,
+		"duration_hours": duration_hours,
 		"offered_at_hours": offered_at_hours,
 		"expires_at_hours": expires_at_hours,
 		"integrity": integrity,
@@ -131,6 +135,7 @@ static func from_dict(data: Dictionary) -> Contract:
 	c.payout = float(data.get("payout", 0.0))
 	c.deposit = float(data.get("deposit", 0.0))
 	c.deadline_hours = float(data.get("deadline_hours", 0.0))
+	c.duration_hours = float(data.get("duration_hours", 8.0))
 	c.offered_at_hours = float(data.get("offered_at_hours", 0.0))
 	c.expires_at_hours = float(data.get("expires_at_hours", 0.0))
 	c.integrity = float(data.get("integrity", 1.0))

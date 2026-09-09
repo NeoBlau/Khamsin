@@ -112,6 +112,11 @@ func _ready() -> void:
 
 	if _drive > 0.0:
 		began = Time.get_ticks_msec()
+		# Управление игроком читает настоящую клавиатуру и затирает то, что
+		# просит инструмент, а открытый диалог ставит мир на паузу.
+		SceneRouter.close_all()
+		get_tree().paused = false
+		_game.vehicle.player_controlled = false
 		_game.vehicle.input.throttle = _throttle
 		_game.vehicle.input.steer = _steer
 		var steps := int(_drive * float(Engine.physics_ticks_per_second))
@@ -119,6 +124,7 @@ func _ready() -> void:
 			await get_tree().physics_frame
 		_game.vehicle.input.throttle = 0.0
 		_game.vehicle.input.steer = 0.0
+		_game.vehicle.player_controlled = true
 		print("проехали %.1f с за %d мс" % [_drive, Time.get_ticks_msec() - began])
 
 	var top := float(_argument("--top", "0"))
@@ -132,6 +138,19 @@ func _ready() -> void:
 			Basis.looking_at(Vector3.DOWN, Vector3.FORWARD), above
 		)
 		_game.camera.fov = 70.0
+
+	var screen := _argument("--screen", "")
+	if screen != "":
+		# Сюжет мог сам открыть разговор на въезде в посёлок — для снимка
+		# конкретного экрана он мешает.
+		SceneRouter.close_all()
+		var extra := {}
+		if _argument("--settlement", "") != "":
+			extra["settlement"] = _argument("--settlement", "")
+		if _argument("--dialogue", "") != "":
+			extra["dialogue"] = _argument("--dialogue", "")
+		SceneRouter.open(StringName(screen), extra)
+		await get_tree().process_frame
 
 	for i: int in _warmup:
 		var frame_began := Time.get_ticks_msec()

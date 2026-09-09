@@ -90,6 +90,8 @@ static func accept(contract: Contract, vehicle: VehicleBody) -> bool:
 	GameState.spend(contract.deposit)
 	contract.state = Contract.State.ACTIVE
 	contract.integrity = 1.0
+	# Часы пошли с погрузки, а не с момента, когда заказ повесили на доску.
+	contract.deadline_hours = GameState.total_hours() + contract.duration_hours
 	GameState.add_contract(contract)
 	GameState.discover_settlement(contract.destination_id)
 	if vehicle != null:

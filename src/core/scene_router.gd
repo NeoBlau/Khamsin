@@ -13,8 +13,8 @@ const GAME_SCENE := "res://scenes/game.tscn"
 
 const SCREENS: Dictionary[StringName, String] = {
 	&"map": "res://scenes/ui/map_screen.tscn",
-	&"contracts": "res://scenes/ui/contract_screen.tscn",
-	&"garage": "res://scenes/ui/garage_screen.tscn",
+	&"contracts": "res://scenes/ui/settlement_screen.tscn",
+	&"garage": "res://scenes/ui/settlement_screen.tscn",
 	&"dialogue": "res://scenes/ui/dialogue_screen.tscn",
 	&"pause": "res://scenes/ui/pause_menu.tscn",
 	&"settings": "res://scenes/ui/settings_screen.tscn",
@@ -88,6 +88,9 @@ func open(screen: StringName, payload: Dictionary = {}) -> void:
 	var packed: PackedScene = load(path)
 	var node := packed.instantiate()
 	node.name = String(screen)
+	if screen == &"garage":
+		payload = payload.duplicate()
+		payload["tab"] = 3
 	if node.has_method(&"setup"):
 		node.call(&"setup", payload)
 	_overlay_layer.add_child(node)
