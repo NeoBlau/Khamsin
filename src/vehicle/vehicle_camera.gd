@@ -113,7 +113,7 @@ func _update_chase(delta: float) -> void:
 
 	global_position = _position
 	if _position.distance_squared_to(_look_at) > 0.01:
-		look_at(_look_at, _roll_up(delta))
+		look_at(_look_at, _roll_up())
 
 
 func _update_hood(delta: float) -> void:
@@ -144,7 +144,7 @@ func _update_orbit(delta: float) -> void:
 
 ## Крен камеры вслед за боковым ускорением. Небольшой — большой вызывает
 ## морскую болезнь, но без него повороты выглядят стерильно.
-func _roll_up(delta: float) -> Vector3:
+func _roll_up() -> Vector3:
 	var lateral := clampf(target.lateral_speed * 0.02, -0.6, 0.6)
 	var right := target.global_transform.basis.x
 	return (Vector3.UP + right * lateral * 0.12).normalized()

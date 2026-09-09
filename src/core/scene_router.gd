@@ -130,9 +130,6 @@ func _refresh_pause() -> void:
 		if screen != &"map":
 			should_pause = true
 	get_tree().paused = should_pause
-	Input.mouse_mode = (
-		Input.MOUSE_MODE_VISIBLE if not _stack.is_empty() else Input.MOUSE_MODE_VISIBLE
-	)
 
 
 func goto_menu() -> void:

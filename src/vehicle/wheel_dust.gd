@@ -86,7 +86,7 @@ static func _soft_blob() -> GradientTexture2D:
 
 ## Обновляется вместе с колесом: интенсивность считается из проскальзывания,
 ## скорости и пыльности грунта.
-func update(delta: float) -> void:
+func update() -> void:
 	if wheel == null or not wheel.grounded:
 		emitting = false
 		return
@@ -101,8 +101,3 @@ func update(delta: float) -> void:
 		return
 	amount_ratio = clampf(intensity, 0.05, 1.0)
 	_material.initial_velocity_max = lerpf(2.0, 7.0, intensity)
-	# Пыль летит назад относительно движения колеса, а не по фиксированной оси.
-	var direction := -global_transform.basis.z
-	if rolling > 0.5:
-		direction = Vector3.FORWARD
-	_material.direction = Vector3(0.0, 0.45, 1.0)

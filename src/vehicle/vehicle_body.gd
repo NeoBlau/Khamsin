@@ -262,7 +262,7 @@ func _physics_process(delta: float) -> void:
 	_update_diagnostics(delta, velocity)
 	_update_visuals(delta)
 	for emitter: WheelDust in _dust:
-		emitter.update(delta)
+		emitter.update()
 	input.clear_edges()
 
 

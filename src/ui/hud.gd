@@ -58,7 +58,6 @@ func _ready() -> void:
 	_build_centre(root)
 
 	EventBus.notification_posted.connect(_on_notification)
-	EventBus.vehicle_warning.connect(_on_warning)
 	EventBus.vehicle_stuck_changed.connect(_on_stuck)
 
 
@@ -348,7 +347,6 @@ func _set_warning(id: StringName, active: bool, text: String) -> void:
 	label.name = name
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_warnings.add_child(label)
-	EventBus.vehicle_warning.emit(id, true)
 
 
 # --- Сообщения -------------------------------------------------------------
@@ -367,16 +365,13 @@ func _on_notification(text: String, kind: StringName) -> void:
 	_toasts.add_child(label)
 	# Больше четырёх сообщений подряд читать некогда — старые уходят сразу.
 	while _toasts.get_child_count() > 4:
-		_toasts.get_child(0).queue_free()
-		_toasts.remove_child(_toasts.get_child(0))
+		var oldest := _toasts.get_child(0)
+		_toasts.remove_child(oldest)
+		oldest.queue_free()
 	var tween := create_tween()
 	tween.tween_interval(TOAST_LIFETIME)
 	tween.tween_property(label, "modulate:a", 0.0, 0.6)
 	tween.tween_callback(label.queue_free)
-
-
-func _on_warning(_kind: StringName, _active: bool) -> void:
-	pass
 
 
 func _on_stuck(stuck: bool) -> void:

@@ -53,8 +53,6 @@ var pressure: float = 2.4
 var wear: float = 0.0
 var temperature: float = 30.0
 
-var _last_position: Vector3 = Vector3.ZERO
-var _has_last_position: bool = false
 
 
 func setup(wheel_spec: VehicleConfig.WheelSpec, vehicle_config: VehicleConfig) -> void:
