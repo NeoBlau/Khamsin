@@ -19,20 +19,34 @@ uniform vec3 track_colour : source_color = vec3(0.63, 0.56, 0.44);
 // та самая, из-за которой дюны читаются как поверхность, а не как заливка.
 uniform vec2 wind_direction = vec2(0.81, 0.58);
 uniform float ripple_length = 1.5;
-uniform float ripple_strength = 0.35;
+uniform float ripple_strength = 0.55;
 uniform float macro_variation = 0.18;
 uniform float sand_roughness = 0.62;
 uniform float rock_roughness = 0.92;
 // Насколько сильно песок бликует на солнце под скользящим углом.
 uniform float sand_sheen = 0.35;
 
+// Отладочные виды. 0 — нормальный рендер, 1 — веса покрытий в цвете вершин,
+// 2 — зерно шума, 3 — рябь, 4 — клетка мировых координат по сто метров.
+// Нужны, чтобы отвечать на вопрос «шейдер врёт или данные», а не гадать.
+uniform int debug_view : hint_range(0, 4) = 0;
+
 varying vec3 world_position;
 varying vec3 surface_blend;
 
-float hash21(vec2 p) {
-	p = fract(p * vec2(123.34, 456.21));
-	p += dot(p, p + 45.32);
-	return fract(p.x * p.y);
+// Хеш и шум обязаны выживать на координатах в тысячи метров. Наивный
+// fract(p * 123.45) на карте 20x20 км ломается: при p около тысячи произведение
+// уходит за сотню тысяч, а у float32 там уже нет дробной части — шум
+// вырождается в константу, и песок становится однотонной заливкой. Поэтому
+// решётка заворачивается в небольшой период, а множители держатся меньше
+// единицы (хеш Дэйва Хоскинса).
+const float LATTICE_PERIOD = 2048.0;
+
+float hash21(vec2 lattice) {
+	vec2 wrapped = mod(lattice, LATTICE_PERIOD);
+	vec3 p3 = fract(vec3(wrapped.x, wrapped.y, wrapped.x) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
 }
 
 float value_noise(vec2 p) {
@@ -73,14 +87,16 @@ void fragment() {
 	float grain = fbm(p * 0.9);
 
 	// Рябь: поперёк ветра, с плавающей фазой, чтобы не читалась решётка.
-	float phase = dot(p, normalize(wind_direction)) / ripple_length;
+	// Фазу заворачиваем по той же причине, что и решётку шума: sin() от
+	// нескольких тысяч на float32 уже дрожит.
+	float phase = mod(dot(p, normalize(wind_direction)) / ripple_length, 1024.0);
 	phase += fbm(p * 0.03) * 4.0;
 	float ripple = sin(phase * 6.2831853);
 	// Асимметрия ряби повторяет асимметрию дюн: пологий подъём, резкий срыв.
 	ripple = sign(ripple) * pow(abs(ripple), 0.7);
 
 	vec3 sand = mix(sand_shadow, sand_colour, clamp(0.45 + macro * macro_variation * 4.0, 0.0, 1.0));
-	sand = mix(sand, sand * 1.08, ripple * 0.5 + 0.5);
+	sand = mix(sand * 0.86, sand * 1.14, ripple * 0.5 + 0.5);
 	vec3 hard = mix(gravel_colour, rock_colour, clamp(grain * 1.4 - 0.15, 0.0, 1.0));
 
 	vec3 albedo = sand * blend.r + hard * blend.g + track_colour * blend.b;
@@ -88,7 +104,23 @@ void fragment() {
 	albedo *= 1.0 - blend.b * 0.10;
 	albedo *= 0.92 + grain * 0.16;
 
+	// Отладочные виды выбираются присваиванием, а не ранним выходом: в шейдерах
+	// Godot `return` внутри fragment запрещён, и шейдер с ним не собирается —
+	// молча, а поверхность просто перестаёт рисоваться.
+	if (debug_view == 1) {
+		albedo = blend;
+	} else if (debug_view == 2) {
+		albedo = vec3(grain);
+	} else if (debug_view == 3) {
+		albedo = vec3(ripple * 0.5 + 0.5);
+	} else if (debug_view == 4) {
+		albedo = vec3(fract(p / 100.0), 0.0);
+	}
+
 	ALBEDO = albedo;
+	if (debug_view > 0) {
+		EMISSION = albedo;
+	}
 	ROUGHNESS = mix(sand_roughness, rock_roughness, blend.g) - blend.r * ripple * 0.05;
 	SPECULAR = 0.5 * (1.0 - blend.g * 0.4);
 	METALLIC = 0.0;

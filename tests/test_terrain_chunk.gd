@@ -87,7 +87,7 @@ func test_skirt_hangs_below_its_own_edge() -> void:
 		if not check(by_column.has(key), "вершина юбки должна стоять под краем сетки"):
 			return
 		if not check_near(
-			by_column[key] - v.y, TerrainChunk.SKIRT_DEPTH, 0.001, "глубина юбки"
+			by_column[key] - v.y, TerrainChunk.skirt_depth(SIZE / 8.0), 0.001, "глубина юбки"
 		):
 			return
 
@@ -102,9 +102,15 @@ func test_skirt_hangs_below_its_own_edge() -> void:
 	for i: int in 9:
 		# Общие вершины: каждая шестнадцатая у мелкой сетки совпадает с грубой.
 		worst = maxf(worst, absf(fine[i * 16].y - coarse[i].y))
+	# Юбка грубого чанка должна перекрывать его собственную ошибку огрубления:
+	# именно она определяет, насколько его поверхность разойдётся с соседней.
+	var depth := TerrainChunk.skirt_depth(SIZE / 8.0)
+	check(depth > worst, "юбка (%.0f м) должна быть глубже расхождения LOD (%.1f м)" % [depth, worst])
+	# И наоборот: у ближнего чанка юбка должна быть короткой, иначе на склоне
+	# из-под него торчит стенка.
 	check(
-		TerrainChunk.SKIRT_DEPTH > worst,
-		"юбка (%.0f м) должна быть глубже расхождения LOD (%.1f м)" % [TerrainChunk.SKIRT_DEPTH, worst]
+		TerrainChunk.skirt_depth(SIZE / 128.0) < 5.0,
+		"у самой мелкой сетки юбка должна быть незаметной"
 	)
 
 
@@ -169,3 +175,91 @@ func test_truck_rests_on_generated_terrain() -> void:
 		if wheel.grounded:
 			grounded += 1
 	check_greater(float(grounded), 3.5, "все четыре колеса должны нащупать землю")
+
+
+func test_vertex_colours_survive_the_array_mesh() -> void:
+	# Шейдер ландшафта красит песок и камень по цвету вершины. Если ArrayMesh
+	# не сохранит этот массив, покрытие в кадре развалится в однотонную кашу, а
+	# в коде всё будет выглядеть правильно — поэтому проверяем на выходе меша.
+	var origin := Vector2(1024.0, -1280.0)
+	var data := TerrainChunk.build_data(field, origin, SIZE, 32, CELL, false, false, SEED)
+	var source: PackedColorArray = data["surface"][Mesh.ARRAY_COLOR]
+	check_greater(float(source.size()), 100.0, "цвета должны быть у всех вершин")
+
+	var distinct: Dictionary[Color, bool] = {}
+	for colour: Color in source:
+		distinct[colour] = true
+	check_greater(float(distinct.size()), 1.0, "на чанке должно встречаться больше одного покрытия")
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, data["surface"])
+	check(
+		(mesh.surface_get_format(0) & Mesh.ARRAY_FORMAT_COLOR) != 0,
+		"меш обязан объявить, что у него есть цвет вершин"
+	)
+	var restored: PackedColorArray = mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	check_equal(restored.size(), source.size(), "число цветов после сборки меша")
+	for i: int in mini(restored.size(), 64):
+		if not check(
+			_colour_close(restored[i], source[i], 0.02),
+			"цвет вершины %d изменился: было %s, стало %s" % [i, source[i], restored[i]]
+		):
+			return
+
+
+static func _colour_close(a: Color, b: Color, tolerance: float) -> bool:
+	return (
+		absf(a.r - b.r) <= tolerance
+		and absf(a.g - b.g) <= tolerance
+		and absf(a.b - b.b) <= tolerance
+	)
+
+
+func test_triangle_winding_matches_the_engine() -> void:
+	# Порядок обхода вершин решает, какая сторона треугольника лицевая. Ошибка
+	# здесь не даёт ни предупреждения, ни красного экрана: поверхность просто
+	# исчезает, и остаются торчать юбки, которые легко принять за рельеф.
+	#
+	# Соглашение не угадываем, а спрашиваем у движка: берём PlaneMesh, который
+	# заведомо смотрит вверх, и меряем его первый треугольник тем же способом.
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(2.0, 2.0)
+	var reference := _first_triangle_normal(plane.get_mesh_arrays())
+	# У Godot лицевая грань обходится по часовой стрелке, поэтому «нормаль» по
+	# правилу правой руки у плоскости, смотрящей вверх, направлена вниз.
+	check(
+		absf(reference.y) > 0.9,
+		"эталонная плоскость должна быть горизонтальной, получили %s" % reference
+	)
+
+	var data := TerrainChunk.build_data(field, Vector2.ZERO, SIZE, 8, CELL, false, false, SEED)
+	var ours := _first_triangle_normal(data["surface"])
+	check_greater(
+		ours.dot(reference), 0.0,
+		"обход вершин ландшафта должен совпадать с движком: эталон %s, у нас %s"
+			% [reference, ours]
+	)
+
+	# И заодно: у всех треугольников сетки нормаль по правилу правой руки
+	# смотрит в ту же сторону, что и у эталона.
+	var vertices: PackedVector3Array = data["surface"][Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = data["surface"][Mesh.ARRAY_INDEX]
+	var grid_triangles := 8 * 8 * 2
+	for t: int in grid_triangles:
+		var normal := _triangle_normal(
+			vertices[indices[t * 3]], vertices[indices[t * 3 + 1]], vertices[indices[t * 3 + 2]]
+		)
+		if not check(
+			normal.dot(reference) > 0.0, "треугольник %d вывернут наизнанку" % t
+		):
+			return
+
+
+func _first_triangle_normal(arrays: Array) -> Vector3:
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	return _triangle_normal(vertices[indices[0]], vertices[indices[1]], vertices[indices[2]])
+
+
+func _triangle_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
+	return (b - a).cross(c - a).normalized()

@@ -10,9 +10,12 @@ extends Node3D
 ## «щелей» между чанками. Шаг сетки у неё жёстко единичный, поэтому узел
 ## масштабируется равномерно, а высоты заранее делятся на тот же множитель.
 
-## Насколько глубоко опускается юбка по краю чанка. Ею закрываются щели между
-## соседями с разным LOD: сшивать сетки честно дороже, а видно одинаково.
-const SKIRT_DEPTH := 26.0
+## Минимальная глубина юбки по краю чанка, метры. Юбкой закрываются щели между
+## соседями с разным уровнем детализации: честно сшивать сетки дороже, а видно
+## одинаково. Глубина адаптивная — она должна перекрывать ошибку огрубления
+## сетки и не больше, иначе на склоне из-под чанка торчит стенка.
+const SKIRT_MIN_DEPTH := 3.0
+const SKIRT_STEP_FACTOR := 1.6
 
 var coordinate: Vector2i = Vector2i.ZERO
 var lod: int = 0
@@ -103,15 +106,19 @@ static func _build_surface(
 			var b := a + 1
 			var c := a + line
 			var d := c + 1
+			# Порядок обхода лицевой грани в Godot — по часовой стрелке, если
+			# смотреть на неё снаружи. Проверяется тестом по эталонному
+			# PlaneMesh: обратный порядок здесь не даёт ни ошибки, ни
+			# предупреждения, поверхность просто перестаёт рисоваться.
 			indices[cursor] = a
-			indices[cursor + 1] = c
-			indices[cursor + 2] = b
+			indices[cursor + 1] = b
+			indices[cursor + 2] = c
 			indices[cursor + 3] = b
-			indices[cursor + 4] = c
-			indices[cursor + 5] = d
+			indices[cursor + 4] = d
+			indices[cursor + 5] = c
 			cursor += 6
 
-	_append_skirt(vertices, normals, uvs, colors, indices, line, divisions)
+	_append_skirt(vertices, normals, uvs, colors, indices, line, divisions, skirt_depth(step))
 
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -125,6 +132,12 @@ static func _build_surface(
 
 ## Юбка по периметру: копия краевых вершин, опущенная вниз. Сосед с более
 ## грубым LOD проходит чуть ниже или выше, и без юбки между чанками видно небо.
+## Глубина юбки для сетки с заданным шагом. Ошибка огрубления растёт вместе с
+## шагом, поэтому у дальних чанков юбка длиннее, а у ближних почти незаметна.
+static func skirt_depth(step: float) -> float:
+	return maxf(SKIRT_MIN_DEPTH, step * SKIRT_STEP_FACTOR)
+
+
 static func _append_skirt(
 	vertices: PackedVector3Array,
 	normals: PackedVector3Array,
@@ -132,7 +145,8 @@ static func _append_skirt(
 	colors: PackedColorArray,
 	indices: PackedInt32Array,
 	line: int,
-	divisions: int
+	divisions: int,
+	depth: float
 ) -> void:
 	var edges: Array[PackedInt32Array] = []
 	var top := PackedInt32Array()
@@ -156,7 +170,7 @@ static func _append_skirt(
 		var edge: PackedInt32Array = edges[e]
 		var base := vertices.size()
 		for index: int in edge:
-			vertices.append(vertices[index] - Vector3(0.0, SKIRT_DEPTH, 0.0))
+			vertices.append(vertices[index] - Vector3(0.0, depth, 0.0))
 			normals.append(normals[index])
 			uvs.append(uvs[index])
 			colors.append(colors[index])
@@ -166,9 +180,9 @@ static func _append_skirt(
 			var c := base + i
 			var d := base + i + 1
 			if flipped[e]:
-				indices.append_array([a, b, c, b, d, c])
-			else:
 				indices.append_array([a, c, b, b, c, d])
+			else:
+				indices.append_array([a, b, c, b, d, c])
 
 
 static func _build_heights(
@@ -234,6 +248,7 @@ func setup(chunk_coordinate: Vector2i, size: float, material: Material) -> void:
 	position = Vector3(float(coordinate.x) * size, 0.0, float(coordinate.y) * size)
 
 	_mesh_instance = MeshInstance3D.new()
+	_mesh_instance.name = "Surface"
 	_mesh_instance.material_override = material
 	_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	add_child(_mesh_instance)

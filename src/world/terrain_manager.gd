@@ -106,6 +106,8 @@ func lod_for(coordinate: Vector2i, from: Vector3) -> int:
 
 
 func _refresh_desired(centre: Vector2i) -> void:
+	if target == null or not is_instance_valid(target):
+		return
 	var wanted: Dictionary[Vector2i, bool] = {}
 	var from := target.global_position
 	for j: int in range(centre.y - view_radius, centre.y + view_radius + 1):
@@ -223,19 +225,25 @@ func pending_count() -> int:
 	return _queue.size() + _jobs.size()
 
 
-## Строит ближнее кольцо синхронно. Нужно на старте и в тестах: ждать кадры
-## ради того, чтобы под машиной появилась земля, — плохая идея.
+## Строит ближнее кольцо синхронно. Нужно на старте: ждать кадры ради того,
+## чтобы под машиной появилась земля, — плохая идея, она успеет улететь вниз.
+##
+## Центральный чанк собирается на полной детализации, соседние — на следующей.
+## Разница видна в паре сотен метров от машины и живёт полсекунды, пока потоки
+## не подтянут их до нормы, зато загрузка вместо четырёх секунд занимает две.
 func build_immediate(around: Vector3) -> void:
 	var centre := world_to_chunk(around)
 	_last_centre = centre
 	for j: int in range(centre.y - collision_radius, centre.y + collision_radius + 1):
 		for i: int in range(centre.x - collision_radius, centre.x + collision_radius + 1):
 			var coordinate := Vector2i(i, j)
-			var divisions: int = lod_divisions[0]
+			var level := 0 if coordinate == centre else mini(1, lod_divisions.size() - 1)
 			var data := TerrainChunk.build_data(
-				field, chunk_origin(coordinate), chunk_size, divisions,
-				collision_cell, true, true, Rng.world_seed
+				field, chunk_origin(coordinate), chunk_size, lod_divisions[level],
+				collision_cell, true, coordinate == centre, Rng.world_seed
 			)
-			data["lod"] = 0
+			data["lod"] = level
 			_install(coordinate, data)
 	_announced_ready = true
+	# Соседей сразу ставим в очередь на полную детализацию.
+	_refresh_desired(centre)
