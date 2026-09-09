@@ -32,6 +32,18 @@ func _process(delta: float) -> void:
 		save_to_slot(AUTOSAVE_SLOT)
 
 
+## Живое состояние машины — топливо, износ, положение — живёт в узле сцены и
+## попадает в GameState только по требованию. Автосохранение обязано попросить
+## само, иначе оно запишет состояние получасовой давности.
+func _sync_vehicle() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	for node: Node in tree.get_nodes_in_group(&"player_vehicle"):
+		if node.has_method(&"sync_to_state"):
+			node.call(&"sync_to_state")
+
+
 func slot_path(slot: int) -> String:
 	return "%s/slot_%d.json" % [DIR, slot]
 
@@ -46,6 +58,7 @@ func last_error() -> String:
 
 func save_to_slot(slot: int) -> bool:
 	_last_error = ""
+	_sync_vehicle()
 	var payload := {
 		"format": Config.SAVE_FORMAT_VERSION,
 		"game_version": Config.VERSION,

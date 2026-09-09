@@ -93,11 +93,31 @@ func speed_at_rpm(target_rpm: float, target_gear: int) -> float:
 	return rpm_to_omega(target_rpm) / ratio * radius
 
 
+## Обороты, которые были бы при этой скорости и передаче без проскальзывания.
+##
+## Именно по ним принимаются решения о переключении, а не по настоящим оборотам
+## двигателя. Разница принципиальная: при разомкнутом сцеплении и при буксующем
+## колесе двигатель свободно раскручивается до отсечки, и коробка, слушающая
+## его, входит в автоколебания — переключилась вверх, обороты упали, сработал
+## кикдаун, обороты подскочили, переключилась вверх. Машина при этом упирается
+## в потолок скорости, потому что сцепление половину времени разомкнуто.
+func rpm_at_speed(speed: float, target_gear: int) -> float:
+	var ratio := config.gear_ratio(target_gear) * transfer_ratio() * config.final_drive
+	var radius := _average_driven_radius()
+	if radius < 0.01:
+		return 0.0
+	return omega_to_rpm(absf(speed) / radius * absf(ratio))
+
+
+## Средний радиус качения ведущих колёс. Именно качения, а не паспортный: под
+## нагрузкой и в песке колесо заметно меньше, и пересчёт «обороты — скорость»
+## по номиналу промахивается на несколько процентов — как раз настолько, чтобы
+## автомат не дотягивался до порога переключения.
 func _average_driven_radius() -> float:
 	var total := 0.0
 	var count := 0
 	for wheel: VehicleWheel in _front_wheels + _rear_wheels:
-		total += wheel.spec.radius
+		total += wheel.rolling_radius()
 		count += 1
 	return total / maxf(float(count), 1.0)
 
@@ -218,8 +238,10 @@ func _clutch_torque(shaft_omega: float) -> float:
 	return clampf(slip * stiffness, -capacity, capacity) * clutch_engagement
 
 
-## Раскидывает момент по осям и колёсам с учётом дифференциалов.
+## Раскидывает момент по осям и колёсам с учётом дифференциалов, а заодно
+## сообщает каждому колесу, какую часть инерции двигателя оно раскручивает.
 func _apply_drive_torque(axle_torque: float) -> void:
+	_publish_coupled_inertia()
 	for wheel: VehicleWheel in _front_wheels + _rear_wheels:
 		wheel.drive_torque = 0.0
 	if _front_wheels.is_empty() and _rear_wheels.is_empty():
@@ -245,6 +267,25 @@ func _apply_drive_torque(axle_torque: float) -> void:
 	elif not _front_wheels.is_empty():
 		front_share = 1.0
 		_distribute_axle(_front_wheels, axle_torque * front_share)
+
+
+## Инерция двигателя и трансмиссии, приведённая к колёсам. Через передачу она
+## умножается на квадрат передаточного отношения — на первой это сотни
+## килограмм-метров против трёх у самого колеса.
+func _publish_coupled_inertia() -> void:
+	var all_wheels := _front_wheels + _rear_wheels
+	for wheel: VehicleWheel in all_wheels:
+		wheel.coupled_inertia = 0.0
+	var ratio := total_ratio()
+	var driven := _active_driven_wheels()
+	if absf(ratio) < 0.001 or driven.is_empty():
+		return
+	var reflected := (config.engine_inertia + config.driveline_inertia) * ratio * ratio
+	# При разомкнутом сцеплении колёса свободны и раскручиваются сами по себе.
+	reflected *= clampf(clutch_engagement, 0.0, 1.0)
+	var share := reflected / float(driven.size())
+	for wheel: VehicleWheel in driven:
+		wheel.coupled_inertia = share
 
 
 func _axle_omega(wheels: Array[VehicleWheel]) -> float:
@@ -311,30 +352,27 @@ func _update_automatic(input: VehicleInput, speed: float) -> void:
 			_begin_shift(-1)
 		return
 
-	var current_rpm := rpm()
-	var up_rpm := config.redline_rpm * 0.88
-	var down_rpm := config.idle_rpm * 1.75
+	# Все пороги — в «оборотах по скорости». Они не зависят ни от буксования,
+	# ни от того, замкнуто ли сейчас сцепление.
+	var geared_rpm := rpm_at_speed(speed, gear)
+	var up_rpm := config.redline_rpm * 0.82
+	var down_rpm := config.idle_rpm * 1.55
+	var kickdown_rpm := config.redline_rpm * 0.42
 
-	# Переключаться только по оборотам нельзя. На песке колёса буксуют, обороты
-	# лезут вверх при стоящей машине, и автомат уходит на шестую, где момента
-	# нет вовсе. Поэтому вверх — лишь если машина действительно едет достаточно
-	# быстро, чтобы на следующей передаче не свалиться ниже оборотов холостого.
-	var speed_ok := absf(speed) > speed_at_rpm(down_rpm, gear + 1) * 0.92
-	if gear < config.top_gear() and current_rpm > up_rpm and input.brake < 0.1 and speed_ok:
-		_begin_shift(gear + 1)
-		return
-	if gear > 1 and current_rpm < down_rpm:
+	if gear < config.top_gear() and geared_rpm > up_rpm and input.brake < 0.1:
+		# Проверяем и то, куда попадём: переключаться вверх, чтобы тут же
+		# провалиться ниже рабочих оборотов, смысла нет.
+		if rpm_at_speed(speed, gear + 1) > down_rpm * 1.15:
+			_begin_shift(gear + 1)
+			return
+	if gear > 1 and geared_rpm < down_rpm:
 		_begin_shift(gear - 1)
 		return
-	# И обратно: если скорость упала настолько, что передача уже не тянет,
-	# вниз идём даже когда обороты держит буксующее колесо.
-	if gear > 1 and absf(speed) < speed_at_rpm(config.idle_rpm * 1.15, gear):
-		_begin_shift(gear - 1)
-		return
-	# Кикдаун: полный газ на низких оборотах — вниз, даже если обороты в норме.
-	if gear > 1 and input.throttle > 0.9 and current_rpm < config.redline_rpm * 0.55:
-		_begin_shift(gear - 1)
-		return
+	# Кикдаун: полный газ и запас до отсечки на передаче ниже.
+	if gear > 1 and input.throttle > 0.9 and geared_rpm < kickdown_rpm:
+		if rpm_at_speed(speed, gear - 1) < config.redline_rpm * 0.92:
+			_begin_shift(gear - 1)
+			return
 	if gear == 1 and absf(speed) < 0.3 and input.throttle < 0.05:
 		_begin_shift(0)
 
@@ -344,7 +382,7 @@ func _begin_shift(target: int) -> void:
 		return
 	_pending_gear = clampi(target, -1, config.top_gear())
 	_shift_timer = config.shift_time
-	_shift_cooldown = config.shift_time + 0.45
+	_shift_cooldown = config.shift_time + 0.9
 
 
 func _set_gear(value: int) -> void:

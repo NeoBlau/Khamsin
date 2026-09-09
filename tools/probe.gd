@@ -1,35 +1,59 @@
 extends Node
-## Разовые замеры. Не тест — инструмент: печатает числа, по которым настраиваются
-## параметры генерации. Содержимое меняется под текущий вопрос.
+## Разовые замеры. Не тест — инструмент: печатает числа, по которым настраивают
+## машину. Содержимое меняется под текущий вопрос.
+
+const STEP := 1.0 / 120.0
 
 
 func _ready() -> void:
-	Rng.set_world_seed(20260907)
-	var build_start := Time.get_ticks_msec()
-	World.build_now(20260907)
-	print("сборка мира: %d мс" % (Time.get_ticks_msec() - build_start))
+	Catalog.ensure_loaded()
+	GameState.new_game(1)
 
-	var field := World.field
-	var start := Time.get_ticks_msec()
-	var sum := 0.0
-	for i: int in 100000:
-		sum += field.height(float(i) * 0.37, float(i) * 0.11)
-	var elapsed := Time.get_ticks_msec() - start
-	print("height(): %d мс на 100k вызовов → %.1f тыс/с" % [elapsed, 100000.0 / maxf(float(elapsed), 1.0)])
+	var ground := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(4000.0, 6.0, 24000.0)
+	shape.shape = box
+	ground.add_child(shape)
+	ground.position = Vector3(0.0, -3.0, 0.0)
+	var material := PhysicsMaterial.new()
+	material.friction = 1.0
+	ground.physics_material_override = material
+	add_child(ground)
 
-	start = Time.get_ticks_msec()
-	sum += field.base_height(1.0, 2.0)
-	for i: int in 100000:
-		sum += field.base_height(float(i) * 0.37, float(i) * 0.11)
-	print("base_height(): %d мс на 100k" % (Time.get_ticks_msec() - start))
+	var truck := VehicleBody.new()
+	truck.config_id = &"tabuk_6t"
+	truck.player_controlled = false
+	truck.surface_provider = func(_p: Vector3) -> Surface: return Surface.get_by_id(&"asphalt")
+	add_child(truck)
+	truck.global_position = Vector3(0.0, 1.4, 0.0)
+	truck.set_pressure_all(2.2)
+	for _i: int in 300:
+		await get_tree().physics_frame
 
-	for divisions: int in [8, 32, 64, 128]:
-		start = Time.get_ticks_msec()
-		TerrainChunk.build_data(field, Vector2(512.0, 512.0), 256.0, divisions, 2.0, false, false, 1)
-		print("чанк LOD div=%d: %d мс" % [divisions, Time.get_ticks_msec() - start])
-
-	start = Time.get_ticks_msec()
-	TerrainChunk.build_data(field, Vector2(512.0, 512.0), 256.0, 128, 2.0, true, true, 1)
-	print("чанк div=128 + коллизия + камни: %d мс" % (Time.get_ticks_msec() - start))
-	print("контрольная сумма: %.1f" % sum)
+	print("t  |v|  v_прод об/мин пер  силы по колёсам (Н)                 сумма  сопр  аэро")
+	truck.input.throttle = 1.0
+	var elapsed := 0.0
+	var next_print := 0.0
+	while elapsed < 40.0:
+		await get_tree().physics_frame
+		elapsed += STEP
+		if elapsed >= next_print:
+			next_print += 5.0
+			var wheel := truck.wheels[2]
+			var total := 0.0
+			var parts := PackedStringArray()
+			for w: VehicleWheel in truck.wheels:
+				var longitudinal := w.force_longitudinal - signf(w.contact_speed_long) * w.resistance
+				total += longitudinal
+				parts.append("%7.0f" % longitudinal)
+			var speed := truck.linear_velocity.length()
+			var drag := 0.5 * Config.air_density * speed * speed * truck.config.drag_coefficient \
+				* truck.config.frontal_area
+			print("%4.1f %5.1f %6.1f %6.0f %3d  %s %7.0f %6.0f %5.0f"
+				% [
+					elapsed, speed * 3.6, truck.forward_speed * 3.6, truck.drivetrain.rpm(),
+					truck.drivetrain.gear, " ".join(parts), total,
+					truck.wheels[0].resistance * 4.0, drag,
+				])
 	get_tree().quit()

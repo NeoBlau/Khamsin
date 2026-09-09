@@ -34,6 +34,10 @@ var resistance: float = 0.0
 var angular_velocity: float = 0.0
 var spin_angle: float = 0.0
 var drive_torque: float = 0.0
+## Инерция двигателя и трансмиссии, приведённая к этому колесу. Ставится
+## трансмиссией каждый шаг: она зависит от передачи и от того, замкнуто ли
+## сцепление.
+var coupled_inertia: float = 0.0
 var brake_torque: float = 0.0
 var slip_ratio: float = 0.0
 var slip_angle: float = 0.0
@@ -149,11 +153,12 @@ func update_tire(
 	contact_speed_lat = velocity.dot(right)
 
 	patch_area = TireModel.patch_area(load, pressure, spec.width, spec.radius)
-	sinkage = TireModel.sinkage(surface, load, patch_area)
+	# Глубже половины радиуса колесо не уходит: дальше в грунт упирается мост, и
+	# это уже не качение, а сидение на брюхе. Без ограничения формула на
+	# предельных нагрузках выдаёт метровую просадку, и машина встаёт намертво.
+	sinkage = minf(TireModel.sinkage(surface, load, patch_area), spec.radius * 0.55)
 
-	# Эффективный радиус качения уменьшается при просадке и спущенном колесе.
-	var rolling_radius := maxf(spec.radius - sinkage * 0.5 - _deflection(), spec.radius * 0.6)
-	var wheel_speed := angular_velocity * rolling_radius
+	var wheel_speed := angular_velocity * rolling_radius()
 	var reference := maxf(absf(contact_speed_long), TireModel.CREEP_SPEED)
 
 	var target_kappa := clampf((wheel_speed - contact_speed_long) / reference, -8.0, 8.0)
@@ -176,6 +181,13 @@ func update_tire(
 	resistance = TireModel.motion_resistance(surface, load, sinkage, pressure)
 
 
+## Эффективный радиус качения: меньше номинального на прогиб шины и на
+## половину просадки в грунт. По нему считается и скольжение, и передаточное
+## отношение «обороты — скорость», поэтому он обязан быть один на всех.
+func rolling_radius() -> float:
+	return maxf(spec.radius - sinkage * 0.5 - _deflection(), spec.radius * 0.6)
+
+
 ## Прогиб шины под нагрузкой, метры. Отдельной функцией — им пользуется и
 ## визуализация, чтобы колесо на месте не висело над землёй.
 func _deflection() -> float:
@@ -187,23 +199,37 @@ func _deflection() -> float:
 ## Здесь же ловится блокировка: если тормозного момента хватает, чтобы
 ## остановить колесо за шаг, колесо просто останавливают, а не разгоняют назад.
 func integrate_spin(dt: float) -> void:
-	var rolling_radius := maxf(spec.radius - sinkage * 0.5 - _deflection(), spec.radius * 0.6)
-	var reaction := -force_longitudinal * rolling_radius
-	var resist := -signf(angular_velocity) * resistance * rolling_radius * 0.5
+	var radius := rolling_radius()
+	var reaction := -force_longitudinal * radius
+	var resist := -signf(angular_velocity) * resistance * radius * 0.5
 	var net := drive_torque + reaction + resist
 
 	var brake := brake_torque
 	if brake > 0.0:
 		var stopping := brake * signf(angular_velocity)
-		var predicted := angular_velocity + (net - stopping) / maxf(spec.inertia, 0.01) * dt
+		var predicted := angular_velocity + (net - stopping) / rotational_inertia() * dt
 		if signf(predicted) != signf(angular_velocity) and absf(angular_velocity) > 1e-4:
 			# Тормоз пересилил — колесо встаёт, а не начинает крутиться назад.
 			angular_velocity = 0.0
 			return
 		net -= stopping
 
-	angular_velocity += net / maxf(spec.inertia, 0.01) * dt
+	angular_velocity += net / rotational_inertia() * dt
 	spin_angle = fposmod(spin_angle + angular_velocity * dt, TAU)
+
+
+## Инерция, которую колесо разгоняет вместе с собой.
+##
+## Без приведённой инерции двигателя это самая опасная строчка в модели. На
+## первой передаче отношение около двадцати пяти к одному, и момент сцепления
+## приходит на колесо умноженным на двадцать пять. Если раскручивать при этом
+## одно только колесо, петля «колесо крутанулось — вал обогнал двигатель —
+## сцепление сменило знак» получает огромный коэффициент усиления, и колёса
+## начинают вращаться назад при полном газе вперёд. Приведённая инерция гасит
+## это и физически верна: маховик на первой передаче ощущается со стороны
+## колеса примерно в шестьсот раз тяжелее, чем есть.
+func rotational_inertia() -> float:
+	return maxf(spec.inertia + coupled_inertia, 0.01)
 
 
 ## Износ и нагрев резины от проскальзывания. Считается раз в кадр, не в подшаге.

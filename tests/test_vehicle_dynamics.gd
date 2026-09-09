@@ -165,3 +165,111 @@ func test_state_never_goes_to_nan() -> void:
 		check(is_finite(wheel.angular_velocity), "обороты колеса должны оставаться числом")
 		check(is_finite(wheel.load), "нагрузка на колесо должна оставаться числом")
 		check(is_finite(wheel.slip_ratio), "проскальзывание должно оставаться числом")
+
+
+func test_launches_like_a_truck_with_two_hundred_horsepower() -> void:
+	# Разгон — самая заметная характеристика машины и самая лёгкая для того,
+	# чтобы незаметно её испортить: слишком усердная противобуксовочная режет
+	# газ на старте, и шеститонник разгоняется как гружёная телега.
+	await _spawn(&"asphalt")
+	truck.input.throttle = 1.0
+	var elapsed := 0.0
+	var to_thirty := -1.0
+	var to_fifty := -1.0
+	while elapsed < 20.0:
+		await simulate(1.0 / 120.0)
+		elapsed += 1.0 / 120.0
+		if to_thirty < 0.0 and truck.forward_speed >= 30.0 / 3.6:
+			to_thirty = elapsed
+		if to_fifty < 0.0 and truck.forward_speed >= 50.0 / 3.6:
+			to_fifty = elapsed
+			break
+	truck.input.throttle = 0.0
+	check_greater(to_thirty, 0.0, "до тридцати километров в час машина обязана разогнаться")
+	check_between(to_thirty, 1.5, 6.0, "секунд до 30 км/ч на твёрдом покрытии")
+	check_greater(to_fifty, 0.0, "и до пятидесяти тоже")
+	check_between(to_fifty, 3.0, 12.0, "секунд до 50 км/ч")
+
+
+func test_traction_control_does_not_strangle_the_launch() -> void:
+	await _spawn(&"gravel")
+	Settings.assist_traction = true
+	await _drive(6.0, 1.0)
+	var assisted := truck.forward_speed
+	after_each()
+
+	await _spawn(&"gravel")
+	Settings.assist_traction = false
+	await _drive(6.0, 1.0)
+	var raw := truck.forward_speed
+	Settings.assist_traction = true
+	check_greater(
+		assisted, raw * 0.75,
+		"с помощником машина не должна ехать сильно хуже: %.1f против %.1f" % [assisted, raw]
+	)
+
+
+func test_a_wrecked_suspension_still_carries_the_truck() -> void:
+	# Изношенная подвеска должна возить плохо, а не переставать существовать.
+	# При нулевой эффективности машина садится на раму, колёса повисают в
+	# воздухе и крутятся вхолостую — из такого состояния игрок не выберется
+	# ничем, и это худший вид поломки, какой может быть в игре про дорогу.
+	await _spawn()
+	var healthy := truck.global_position.y
+	truck.suspension_health = 0.0
+	await simulate(3.0)
+	var wrecked := truck.global_position.y
+
+	check(wrecked < healthy, "убитая подвеска должна просаживать машину")
+	check_greater(
+		wrecked, healthy - 0.32, "но не настолько, чтобы рама легла на землю"
+	)
+	var grounded := 0
+	var load := 0.0
+	for wheel: VehicleWheel in truck.wheels:
+		if wheel.grounded:
+			grounded += 1
+		load += wheel.load
+	check_equal(grounded, 4, "колёса должны остаться на земле")
+	check_greater(load, truck.mass * Config.gravity * 0.5, "и продолжать нести вес")
+
+	await _drive(6.0, 1.0)
+	check_greater(truck.forward_speed, 2.0, "и машина должна ехать, пусть и хуже")
+
+
+func test_landings_do_not_destroy_the_suspension_in_one_go() -> void:
+	await _spawn()
+	truck.global_position += Vector3.UP * 3.5
+	await simulate(3.0)
+	check_greater(
+		truck.suspension_health, 0.8,
+		"падение с трёх метров не должно съедать пятую часть ресурса подвески"
+	)
+
+
+func test_reaches_a_plausible_top_speed() -> void:
+	# Потолок скорости определяется тягой против сопротивления. Любая лишняя
+	# сила — например, демпфирование скорости, включённое в движке по
+	# умолчанию, — срезает его вдвое, и найти это по коду почти невозможно:
+	# тяга на месте, явное сопротивление на месте, а разгона нет.
+	await _spawn(&"asphalt")
+	await _drive(50.0, 1.0)
+	var top := truck.forward_speed * 3.6
+	check_between(top, 95.0, 190.0, "максимальная скорость на асфальте, км/ч")
+	check_greater(float(truck.drivetrain.gear), 3.0, "на максималке должна стоять высокая передача")
+
+
+func test_coasting_slows_down_at_a_believable_rate() -> void:
+	# Обратная проверка к предыдущей: без газа машина обязана замедляться, но
+	# от воздуха и качения, а не от невидимого тормоза. Замедление накатом у
+	# гружёного грузовика на семидесяти — порядка 0.05 g.
+	await _spawn(&"asphalt")
+	await _drive(30.0, 1.0)
+	var entry := truck.forward_speed
+	check_greater(entry, 15.0, "для наката нужна скорость")
+	var start := truck.global_position
+	await _drive(6.0, 0.0)
+	var lost := entry - truck.forward_speed
+	var deceleration := lost / 6.0 / Config.gravity
+	check_between(deceleration, 0.01, 0.10, "замедление накатом в долях g")
+	check_greater(start.distance_to(truck.global_position), 80.0, "и за шесть секунд надо проехать накатом")

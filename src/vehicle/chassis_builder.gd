@@ -7,8 +7,8 @@ extends RefCounted
 ## соответствует габаритам и колёсной базе. Когда появится модель художника,
 ## меняется только эта функция.
 
-const CAB_COLOUR := Color(0.79, 0.68, 0.42)
-const BODY_COLOUR := Color(0.66, 0.55, 0.34)
+const CAB_COLOUR := Color(0.86, 0.76, 0.52)
+const BODY_COLOUR := Color(0.74, 0.63, 0.40)
 const DARK_COLOUR := Color(0.20, 0.20, 0.22)
 const GLASS_COLOUR := Color(0.16, 0.22, 0.26)
 

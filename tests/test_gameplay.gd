@@ -274,3 +274,28 @@ func test_deadlines_allow_a_realistic_pace() -> void:
 			"%s: %.1f ч на %.1f км — срок ни на что не влияет"
 				% [contract.id, contract.duration_hours, kilometres]
 		)
+
+
+func test_saving_remembers_where_the_truck_stands() -> void:
+	# Загрузка обязана вернуть игрока туда, где он остановился, а не в посёлок.
+	var vehicle := VehicleBody.new()
+	vehicle.config_id = &"tabuk_6t"
+	vehicle.player_controlled = true
+	vehicle.add_to_group(&"player_vehicle")
+	host.add_child(vehicle)
+	var spot := Transform3D(Basis(Vector3.UP, 1.1), Vector3(3210.0, -12.5, -880.0))
+	vehicle.global_transform = spot
+	vehicle.fuel = 77.0
+	vehicle.sync_to_state()
+
+	check(SaveSystem.save_to_slot(4), "сейв должен записаться")
+	GameState.new_game(SEED)
+	check(SaveSystem.load_from_slot(4), "и прочитаться обратно")
+	check(GameState.has_spawn_transform, "положение машины должно попасть в сейв")
+	check(
+		GameState.spawn_transform.origin.distance_to(spot.origin) < 0.5,
+		"и восстановиться: было %s, стало %s" % [spot.origin, GameState.spawn_transform.origin]
+	)
+	check_near(float(GameState.vehicle["fuel"]), 77.0, 0.01, "топливо тоже")
+	SaveSystem.delete_slot(4)
+	vehicle.queue_free()

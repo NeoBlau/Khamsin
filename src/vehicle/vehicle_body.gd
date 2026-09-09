@@ -60,7 +60,14 @@ var _rollover_timer: float = 0.0
 var _previous_velocity: Vector3 = Vector3.ZERO
 var _shock_filtered: float = 0.0
 var _wheel_visuals: Array[Node3D] = []
+var _dust: Array[WheelDust] = []
 var _distance_since_sync: float = 0.0
+
+## Во что превращается изношенная подвеска. Ноль здесь означал бы, что пружин
+## нет вовсе: машина садится на раму, колёса повисают и крутятся в воздухе, и
+## выехать уже невозможно ничем. Убитая подвеска должна возить плохо, а не
+## запирать игрока насмерть.
+const MIN_SUSPENSION_EFFICIENCY := 0.45
 
 
 func _ready() -> void:
@@ -86,6 +93,17 @@ func _build_from_config() -> void:
 		inertia = config.inertia
 	can_sleep = false
 	continuous_cd = true
+	# Демпфирование движка выключено намеренно. По умолчанию Godot гасит
+	# скорость тел на 0.1 в секунду — для шеститонника на пятидесяти это семь
+	# килоньютонов встречной силы, больше, чем всё аэродинамическое
+	# сопротивление вместе с качением. Машина упиралась в потолок скорости
+	# около шестидесяти километров в час, и по коду это выглядело как загадка:
+	# тяга есть, сопротивления нет, а разгона нет. Сопротивление здесь считается
+	# явно и целиком — воздух, качение, сгребание грунта.
+	linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	linear_damp = 0.0
+	angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	angular_damp = 0.0
 	contact_monitor = true
 	max_contacts_reported = 8
 	# Трение и упругость кузова: он не должен ни прилипать к скале, ни скакать.
@@ -143,6 +161,23 @@ func attach_visuals(chassis: Node3D, wheel_nodes: Array[Node3D]) -> void:
 	_wheel_visuals = wheel_nodes
 	if chassis != null and chassis.get_parent() == null:
 		add_child(chassis)
+	_build_dust()
+
+
+## Шлейф пыли живёт в мире, а не в кузове: иначе облако едет вместе с машиной,
+## как приклеенное, и весь смысл теряется.
+func _build_dust() -> void:
+	for emitter: WheelDust in _dust:
+		emitter.queue_free()
+	_dust.clear()
+	var parent := get_parent()
+	if parent == null:
+		return
+	for wheel: VehicleWheel in wheels:
+		var emitter := WheelDust.new()
+		emitter.wheel = wheel
+		parent.add_child(emitter)
+		_dust.append(emitter)
 
 
 ## Подтягивает состояние машины из сейва.
@@ -181,6 +216,12 @@ func sync_to_state() -> void:
 	GameState.vehicle["coolant_temp"] = drivetrain.coolant_temp
 	GameState.vehicle["tire_pressures"] = pressures
 	GameState.vehicle["tire_wear"] = wear
+	# Куда игрок поставил машину — часть прогресса: без этого загрузка сейва
+	# возвращала бы его в посёлок, где бы он ни остановился.
+	GameState.spawn_transform = global_transform
+	GameState.has_spawn_transform = true
+	var here := World.settlement_at(global_position)
+	GameState.spawn_settlement = here.id if here != null else &""
 
 
 func refresh_cargo_mass() -> void:
@@ -220,6 +261,8 @@ func _physics_process(delta: float) -> void:
 	_consume_fuel(delta)
 	_update_diagnostics(delta, velocity)
 	_update_visuals(delta)
+	for emitter: WheelDust in _dust:
+		emitter.update(delta)
 	input.clear_edges()
 
 
@@ -334,9 +377,14 @@ func _apply_antiroll() -> void:
 		if stiffness <= 0.0:
 			continue
 		var difference := left.compression - right.compression
-		var force := difference * stiffness * suspension_health
+		var force := difference * stiffness * suspension_efficiency()
 		left.antiroll_force = -force
 		right.antiroll_force = force
+
+
+## Доля работоспособности подвески, 0.45..1.
+func suspension_efficiency() -> float:
+	return lerpf(MIN_SUSPENSION_EFFICIENCY, 1.0, clampf(suspension_health, 0.0, 1.0))
 
 
 func _axle_pairs() -> Array[Array]:
@@ -383,16 +431,22 @@ func _apply_brakes(delta: float) -> void:
 
 	# Противобуксовочная режет газ целиком: раздельный привод по колёсам на
 	# такой машине не стоит, а имитировать его было бы враньём.
-	if Settings.assist_traction:
+	#
+	# Порог намеренно высокий и срез мягкий. Трогание гружёного грузовика на
+	# первой передаче — это всегда заметное проскальзывание, и система, честно
+	# реагирующая на него, превращает разгон в десять секунд до тридцати.
+	# Ниже трёх метров в секунду она вообще не вмешивается: так же ведут себя
+	# внедорожные настройки на реальных машинах.
+	if Settings.assist_traction and absf(forward_speed) > 3.0:
 		var worst := 0.0
 		for wheel: VehicleWheel in wheels:
 			if wheel.spec.driven and wheel.grounded:
 				worst = maxf(worst, wheel.slip_ratio)
-		var target := 1.0 if worst < 0.45 else clampf(1.0 - (worst - 0.45) * 0.8, 0.25, 1.0)
-		_traction_cut = move_toward(_traction_cut, target, delta * 6.0)
+		var target := 1.0 if worst < 0.9 else clampf(1.0 - (worst - 0.9) * 0.30, 0.55, 1.0)
+		_traction_cut = move_toward(_traction_cut, target, delta * 3.0)
 		command.throttle = input.throttle * _traction_cut
 	else:
-		_traction_cut = 1.0
+		_traction_cut = move_toward(_traction_cut, 1.0, delta * 4.0)
 
 
 ## Считает шины подшагами и возвращает [сумма сил, сумма моментов] в мировых
@@ -411,7 +465,7 @@ func _simulate_tires(xform: Transform3D, delta: float) -> Array:
 		if not wheel.grounded:
 			frames.append([])
 			continue
-		wheel.load = wheel.suspension_force() * suspension_health
+		wheel.load = wheel.suspension_force() * suspension_efficiency()
 		var normal := wheel.contact_normal
 		var steer_basis := Basis(Vector3.UP, wheel.steer_angle)
 		var wheel_forward := xform.basis * (steer_basis * Vector3.FORWARD)
@@ -557,9 +611,12 @@ func _update_diagnostics(delta: float, velocity: Vector3) -> void:
 ## Удар: бьёт кузов и груз. Хрупкое стекло на трамплине — это не «минус
 ## сколько-то очков», а конкретный процент от гонорара.
 func _register_shock(g_force: float) -> void:
-	var excess := g_force - Config.cargo_shock_threshold_g
-	body_health = clampf(body_health - excess * 0.004, 0.0, 1.0)
-	suspension_health = clampf(suspension_health - excess * 0.006, 0.0, 1.0)
+	# Один удар не должен съедать половину ресурса: перегрузка на приземлении
+	# легко доходит до двадцати g, и без ограничения пара прыжков убивала
+	# подвеску до состояния, из которого машина уже не едет.
+	var excess := minf(g_force - Config.cargo_shock_threshold_g, 6.0)
+	body_health = clampf(body_health - excess * 0.0025, 0.0, 1.0)
+	suspension_health = clampf(suspension_health - excess * 0.0035, 0.0, 1.0)
 	EventBus.vehicle_impact.emit(excess, global_position)
 	if not player_controlled:
 		return

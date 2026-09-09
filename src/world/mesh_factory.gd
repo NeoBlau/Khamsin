@@ -57,7 +57,7 @@ static func standard_material(colour: Color, roughness: float = 0.85, metallic: 
 
 
 ## Коробка с заданными размерами и цветом — кирпич, из которого собран грузовик.
-static func box(size: Vector3, colour: Color, roughness: float = 0.7, metallic: float = 0.1) -> MeshInstance3D:
+static func box(size: Vector3, colour: Color, roughness: float = 0.7, metallic: float = 0.0) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
 	mesh.size = size
 	var instance := MeshInstance3D.new()
