@@ -38,12 +38,21 @@ func _ready() -> void:
 		% [config.fuel_capacity, config.top_gear(), config.transfer_low])
 	_line("")
 
+	# Секции можно гонять по одной: полный прогон занимает четверть часа, и
+	# ждать его ради одной таблицы незачем.
+	#   godot --headless --path . res://tools/bench_vehicle.tscn -- --only gradient
+	var only := _argument("--only", "all")
 	await _build_rig()
-	await _acceleration_table()
-	await _braking_table()
-	await _pressure_table()
-	await _gradient_table()
-	await _record_run()
+	if only == "all" or only == "acceleration":
+		await _acceleration_table()
+	if only == "all" or only == "braking":
+		await _braking_table()
+	if only == "all" or only == "pressure":
+		await _pressure_table()
+	if only == "all" or only == "gradient":
+		await _gradient_table()
+	if only == "all" or only == "record":
+		await _record_run()
 
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
 	var file := FileAccess.open("%s/report.txt" % OUT_DIR, FileAccess.WRITE)
@@ -55,6 +64,14 @@ func _ready() -> void:
 
 ## Печатаем сразу, а не в конце: прогон занимает минуты, и молчащий стенд
 ## неотличим от зависшего.
+func _argument(name: String, fallback: String) -> String:
+	var args := OS.get_cmdline_user_args()
+	for i: int in args.size():
+		if args[i] == name and i + 1 < args.size():
+			return args[i + 1]
+	return fallback
+
+
 func _line(text: String) -> void:
 	_report.append(text)
 	print(text)
@@ -106,9 +123,13 @@ func _build_rig(slope: float = 0.0) -> void:
 
 
 ## Готовит машину к следующему замеру, не сдвигая её с места.
-func _reset(surface_id: StringName, pressure: float) -> void:
+func _reset(surface_id: StringName, pressure: float, hold_brake: bool = false) -> void:
 	_surface_id = surface_id
 	_truck.input.reset()
+	# На уклоне машина обязана стоять на тормозе, пока её не тронут: иначе она
+	# успевает разогнаться назад за время подготовки, и замеряется не подъём в
+	# гору, а попытка поймать катящийся грузовик.
+	_truck.input.brake = 1.0 if hold_brake else 0.0
 	_truck.linear_velocity = Vector3.ZERO
 	_truck.angular_velocity = Vector3.ZERO
 	_truck.set_pressure_all(pressure)
@@ -120,11 +141,13 @@ func _reset(surface_id: StringName, pressure: float) -> void:
 	_truck.drivetrain.coolant_temp = Drivetrain.AMBIENT_TEMP
 	_truck.drivetrain.low_range = false
 	_truck.drivetrain.diff_locked = false
+	_truck.drivetrain.mode = Drivetrain.Mode.AUTOMATIC
 	_truck.drivetrain.force_gear(0)
 	for wheel: VehicleWheel in _truck.wheels:
 		wheel.wear = 0.0
 		wheel.angular_velocity = 0.0
 	await _wait(2.0)
+	_truck.input.brake = 1.0 if hold_brake else 0.0
 	if VERBOSE:
 		var grounded := 0
 		var load := 0.0
@@ -245,7 +268,7 @@ func _pressure_table() -> void:
 
 
 func _gradient_table() -> void:
-	_line("Предельный подъём (двадцать секунд на въезд), градусы")
+	_line("Предельный подъём на пониженной с блокировками, градусы")
 	for surface_id: StringName in [&"gravel", &"sand_firm", &"sand_soft"]:
 		var surface := Surface.get_by_id(surface_id)
 		var best := 0.0
@@ -254,22 +277,30 @@ func _gradient_table() -> void:
 			# а машина едет именно в -Z. С обратным знаком стенд честно мерил
 			# спуск и уверенно рапортовал про сорок градусов по рыхлому песку.
 			await _rebuild(deg_to_rad(float(degrees)))
-			await _reset(surface_id, 1.6)
+			await _reset(surface_id, 1.6, true)
 			var start := _truck.global_position
 			_truck.drivetrain.low_range = true
 			_truck.drivetrain.diff_locked = true
+			# Трогаемся с тормоза: отпускаем и сразу газ, как это делает водитель.
+			_truck.input.brake = 0.0
 			_truck.input.throttle = 1.0
-			await _wait(12.0)
+			await _wait(16.0)
 			_truck.input.throttle = 0.0
 			# Считаем взятым подъём, на котором машина реально набрала высоту.
 			# Пройденное расстояние тут не годится: сползая назад, она проходит
 			# его ничуть не хуже, и стенд честно рапортует про сорок градусов
 			# по рыхлому песку.
-			if _truck.global_position.y - start.y > 4.0:
+			var climbed := _truck.global_position.y - start.y
+			var along := start.distance_to(_truck.global_position)
+			_line("    %d°: набрано %.1f м, пройдено %.1f м, передача %d, %.0f об/мин"
+				% [degrees, climbed, along, _truck.drivetrain.gear, _truck.drivetrain.rpm()])
+			if climbed > 2.0:
 				best = float(degrees)
 			else:
 				break
-		_line("  %-14s  до %.0f°" % [surface.display_name, best])
+		_line("  %-14s  %s" % [
+			surface.display_name, "не берёт даже десять" if best <= 0.0 else "до %.0f°" % best
+		])
 	_line("")
 
 

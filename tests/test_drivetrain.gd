@@ -200,3 +200,73 @@ func test_automatic_downshifts_when_speed_drops() -> void:
 		if i == 899:
 			check_greater(float(drivetrain.gear), 2.0, "на скорости должна стоять высокая передача")
 	check(drivetrain.gear <= 2, "после падения скорости автомат обязан уйти вниз")
+
+
+func test_automatic_engages_a_gear_while_rolling_backwards() -> void:
+	# На подъёме машина успевает сползти назад, пока включается передача.
+	# Автомат обязан всё равно включить первую: иначе газ в пол оставляет
+	# коробку в нейтрали, и грузовик уезжает вниз задом с ревущим мотором.
+	drivetrain.force_gear(0)
+	input.throttle = 1.0
+	var rolling_back := -2.5
+	for _i: int in 240:
+		for wheel: VehicleWheel in wheels:
+			wheel.angular_velocity = rolling_back / wheel.spec.radius
+		drivetrain.update(1.0 / 120.0, input, rolling_back)
+	check_greater(
+		float(drivetrain.gear), 0.0,
+		"при скатывании назад с газом должна включиться передача вперёд, стоит %d" % drivetrain.gear
+	)
+
+
+func test_automatic_does_not_slam_into_gear_at_speed_in_reverse() -> void:
+	# Обратная сторона: если машина катится назад быстро, включать первую —
+	# это удар по трансмиссии, а не помощь.
+	drivetrain.force_gear(0)
+	input.throttle = 1.0
+	for _i: int in 120:
+		for wheel: VehicleWheel in wheels:
+			wheel.angular_velocity = -12.0 / wheel.spec.radius
+		drivetrain.update(1.0 / 120.0, input, -12.0)
+	check_equal(drivetrain.gear, 0, "на быстром откате коробка остаётся в нейтрали")
+
+
+func test_automatic_holds_the_gear_when_the_truck_stops_pulling() -> void:
+	# На затяжном подъёме скорость перестаёт расти задолго до отсечки. Автомат,
+	# который в этот момент переключается вверх, оставляет машину без тяги —
+	# она глохнет и уезжает вниз задом.
+	input.throttle = 1.0
+	var speed := 6.0
+	for i: int in 2400:
+		# Первые пять секунд разгоняемся, дальше упираемся и едем ровно.
+		if i < 600:
+			speed = 6.0 + float(i) / 600.0 * 6.0
+		for wheel: VehicleWheel in wheels:
+			wheel.angular_velocity = speed / wheel.spec.radius
+		drivetrain.update(1.0 / 120.0, input, speed)
+	var held := drivetrain.gear
+	check(held <= 3, "упёршись в подъём, коробка должна остаться внизу, стоит %d" % held)
+	check_near(drivetrain.acceleration(), 0.0, 0.4, "стенд должен видеть, что разгона нет")
+
+
+func test_automatic_kicks_down_when_the_truck_starts_losing_speed() -> void:
+	# Признак того, что передача не тянет, — не обороты, а падающая скорость.
+	# На подъёме обороты остаются высокими до последнего, и коробка, слушающая
+	# только их, спохватывается, когда машина уже почти встала.
+	drivetrain.mode = Drivetrain.Mode.AUTOMATIC
+	input.throttle = 1.0
+	var speed := 16.0
+	for i: int in 3000:
+		if i < 1200:
+			speed = 16.0 + float(i) / 1200.0 * 6.0
+		else:
+			speed = maxf(speed - 0.004, 5.0)
+		for wheel: VehicleWheel in wheels:
+			wheel.angular_velocity = speed / wheel.spec.radius
+		drivetrain.update(1.0 / 120.0, input, speed)
+		if i == 1199:
+			check_greater(float(drivetrain.gear), 3.0, "на разгоне коробка уходит вверх")
+	check(
+		drivetrain.gear <= 3,
+		"когда скорость начала падать, автомат обязан уйти вниз, стоит %d" % drivetrain.gear
+	)

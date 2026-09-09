@@ -39,6 +39,10 @@ var health: float = 1.0
 var _shift_timer: float = 0.0
 var _pending_gear: int = 0
 var _shift_cooldown: float = 0.0
+## Сглаженное продольное ускорение, м/с². По нему автомат понимает, тянет ли
+## машина на текущей передаче или уже упёрлась.
+var _acceleration: float = 0.0
+var _previous_speed: float = 0.0
 var _front_wheels: Array[VehicleWheel] = []
 var _rear_wheels: Array[VehicleWheel] = []
 
@@ -125,6 +129,10 @@ func _average_driven_radius() -> float:
 ## Главный шаг. `speed` — продольная скорость кузова, м/с.
 func update(dt: float, input: VehicleInput, speed: float) -> void:
 	_shift_cooldown = maxf(_shift_cooldown - dt, 0.0)
+	var instant := (speed - _previous_speed) / maxf(dt, 1e-5)
+	_previous_speed = speed
+	# Сглаживаем сильно: решение о передаче не должно зависеть от одной кочки.
+	_acceleration = lerpf(_acceleration, instant, clampf(dt * 2.0, 0.0, 1.0))
 	_update_shifting(dt, input, speed)
 
 	if not running:
@@ -346,9 +354,15 @@ func _update_automatic(input: VehicleInput, speed: float) -> void:
 		return
 	if gear <= 0:
 		# Трогаемся с места: вперёд по газу, назад — по тормозу на стоящей машине.
-		if input.throttle > 0.05 and speed > -0.5:
+		#
+		# Порог по скатыванию назад щедрый намеренно. На подъёме машина успевает
+		# сползти, пока идёт включение передачи, и строгая проверка «почти
+		# стоим» запирала коробку в нейтрали: газ в пол, мотор в отсечке, а
+		# грузовик уезжает вниз задом. Настоящий автомат в этой ситуации просто
+		# включает передачу и даёт сцеплению проскальзывать.
+		if input.throttle > 0.05 and speed > -6.0:
 			_begin_shift(1)
-		elif input.brake > 0.35 and speed < 0.4 and gear == 0:
+		elif input.brake > 0.35 and absf(speed) < 0.4 and gear == 0:
 			_begin_shift(-1)
 		return
 
@@ -362,13 +376,29 @@ func _update_automatic(input: VehicleInput, speed: float) -> void:
 	if gear < config.top_gear() and geared_rpm > up_rpm and input.brake < 0.1:
 		# Проверяем и то, куда попадём: переключаться вверх, чтобы тут же
 		# провалиться ниже рабочих оборотов, смысла нет.
-		if rpm_at_speed(speed, gear + 1) > down_rpm * 1.15:
+		var lands_well := rpm_at_speed(speed, gear + 1) > down_rpm * 1.15
+		# И то, тянет ли машина сейчас. На подъёме под полным газом скорость
+		# перестаёт расти задолго до отсечки: переключиться вверх в этот момент
+		# значит заглохнуть на склоне и уехать вниз задом.
+		#
+		# Исключение — когда двигатель вот-вот упрётся в отсечку: там выбора
+		# нет, вверх приходится идти в любом случае.
+		var forced := geared_rpm > config.redline_rpm * 0.97
+		var still_pulling := _acceleration > 0.4 or input.throttle < 0.8 or forced
+		if lands_well and still_pulling:
 			_begin_shift(gear + 1)
 			return
 	if gear > 1 and geared_rpm < down_rpm:
 		_begin_shift(gear - 1)
 		return
-	# Кикдаун: полный газ и запас до отсечки на передаче ниже.
+	# Кикдаун по нагрузке: полный газ, а машина замедляется — значит передача
+	# уже не тянет. На подъёме это единственный признак: обороты при этом ещё
+	# высокие, и по ним коробка ничего не заподозрит, пока не станет поздно.
+	if gear > 1 and input.throttle > 0.8 and _acceleration < -0.2:
+		if rpm_at_speed(speed, gear - 1) < config.redline_rpm * 0.95:
+			_begin_shift(gear - 1)
+			return
+	# Кикдаун по оборотам: полный газ и запас до отсечки на передаче ниже.
 	if gear > 1 and input.throttle > 0.9 and geared_rpm < kickdown_rpm:
 		if rpm_at_speed(speed, gear - 1) < config.redline_rpm * 0.92:
 			_begin_shift(gear - 1)
@@ -391,6 +421,11 @@ func _set_gear(value: int) -> void:
 	gear = value
 	gear_changed.emit(gear)
 	EventBus.gear_changed.emit(gear)
+
+
+## Тянет ли машина на текущей передаче, м/с². Пригодится и подсказке в кабине.
+func acceleration() -> float:
+	return _acceleration
 
 
 func force_gear(value: int) -> void:
