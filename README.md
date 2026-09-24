@@ -38,15 +38,14 @@ godot --version          # должно быть 4.5.1.stable
 **2. Взять код.**
 
 ```bash
-git clone https://github.com/NeoBlau/NeoShop-.git
-cd NeoShop-
-git checkout claude/3d-game-complexity-level-thmtdy
+git clone https://github.com/NeoBlau/khamsin.git
+cd khamsin
 ```
 
 **3. Запустить.**
 
 ```bash
-godot --path games/khamsin
+godot --path .
 ```
 
 Первый запуск дольше остальных: Godot импортирует ресурсы. Дальше — главное
@@ -55,13 +54,13 @@ godot --path games/khamsin
 Открыть в редакторе, чтобы смотреть и править:
 
 ```bash
-godot --path games/khamsin --editor
+godot --path . --editor
 ```
 
 ### Собрать .app
 
 ```bash
-games/khamsin/tools/build.sh macOS
+tools/build.sh macOS
 ```
 
 Скрипт проверяет версию движка, импортирует ресурсы, прогоняет тесты и кладёт
@@ -91,8 +90,8 @@ open build/Khamsin.app
 ### Тесты
 
 ```bash
-games/khamsin/tools/test.sh              # все, около десяти секунд
-games/khamsin/tools/test.sh --filter tire
+tools/test.sh              # все, около десяти секунд
+tools/test.sh --filter tire
 ```
 
 ## Управление
@@ -135,7 +134,7 @@ games/khamsin/tools/test.sh --filter tire
 ## Как устроено
 
 ```
-games/khamsin/
+khamsin/
   project.godot        Godot 4.5, Forward+, Metal на macOS, физика 120 Гц, Jolt
   src/core/            автолоады: конфиг, случайность, шина событий, сейвы,
                        настройки, состояние прохождения, телеметрия, экраны
@@ -271,13 +270,13 @@ tools/test.sh --filter tire   # только шина
 
 ```bash
 # стенд телеметрии: разгон, тормозной путь, влияние давления, предельный уклон
-godot --headless --path games/khamsin res://tools/bench_vehicle.tscn
+godot --headless --path . res://tools/bench_vehicle.tscn
 
 # одна секция вместо всех: полный прогон занимает четверть часа
-godot --headless --path games/khamsin res://tools/bench_vehicle.tscn -- --only gradient
+godot --headless --path . res://tools/bench_vehicle.tscn -- --only gradient
 
 # снимок мира в PNG без запуска игры руками
-godot --path games/khamsin --rendering-driver vulkan --resolution 1280x720 \
+godot --path . --rendering-driver vulkan --resolution 1280x720 \
   res://tools/screenshot.tscn -- --out /tmp/shot.png --hour 8.5 --drive 6
 ```
 
@@ -287,7 +286,7 @@ godot --path games/khamsin --rendering-driver vulkan --resolution 1280x720 \
 ## Сборка под macOS
 
 ```bash
-games/khamsin/tools/build.sh macOS
+tools/build.sh macOS
 ```
 
 Скрипт проверяет версию движка, импортирует ресурсы, прогоняет тесты и

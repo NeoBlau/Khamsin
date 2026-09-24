@@ -1,6 +1,6 @@
 extends Node
 ## Прогон всех тестов из res://tests. Запуск:
-##   godot --headless --path games/khamsin res://tests/run_tests.tscn
+##   godot --headless --path . res://tests/run_tests.tscn
 ##
 ## Сцена, а не `--script`, потому что тестам нужны автолоады, а они появляются
 ## только в обычном главном цикле.

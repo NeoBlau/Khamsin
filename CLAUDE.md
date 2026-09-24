@@ -68,10 +68,10 @@ tools/test.sh --filter tire    # часть тестов
 
 ```bash
 # стенд телеметрии: разгон, тормозной путь, давление в шинах, предельный уклон
-godot --headless --path games/khamsin res://tools/bench_vehicle.tscn
+godot --headless --path . res://tools/bench_vehicle.tscn
 
 # снимок мира без запуска игры руками
-xvfb-run -a godot --path games/khamsin --rendering-driver vulkan \
+xvfb-run -a godot --path . --rendering-driver vulkan \
   --resolution 1280x720 res://tools/screenshot.tscn -- \
   --out /tmp/shot.png --hour 8.5 --drive 6 --screen contracts
 ```

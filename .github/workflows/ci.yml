@@ -1,0 +1,46 @@
+name: Тесты
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.5.1
+
+jobs:
+  tests:
+    name: Тесты
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Кеш движка
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Поставить Godot
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot && cd ~/godot
+          curl -sSLo godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
+          chmod +x godot
+
+      - name: Прогнать тесты
+        run: |
+          export PATH="$HOME/godot:$PATH"
+          GODOT="$HOME/godot/godot" tools/test.sh
+
+      - name: Стенд телеметрии
+        # Не проверка, а сводка: разгон, тормозной путь, влияние давления.
+        # Полезно видеть в логе сборки, как настройки машины поехали.
+        run: |
+          "$HOME/godot/godot" --headless --path . \
+            res://tools/bench_vehicle.tscn 2>&1 | grep -v "^ERROR\|^WARNING" || true

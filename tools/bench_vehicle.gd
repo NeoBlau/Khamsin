@@ -7,7 +7,7 @@ extends Node
 ## строится кривая разгона, если нужно смотреть глазами.
 ##
 ## Запуск:
-##   godot --headless --path games/khamsin res://tools/bench_vehicle.tscn
+##   godot --headless --path . res://tools/bench_vehicle.tscn
 ##
 ## Это не тест: он ничего не утверждает, он измеряет. Пороговые проверки живут
 ## в tests/, а сюда ходят, когда меняют настройки машины и хотят понять, что

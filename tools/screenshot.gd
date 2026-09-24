@@ -3,7 +3,7 @@ extends Node
 ## действительно собирается и выглядит как задумано, без запуска игры руками.
 ##
 ## Запуск:
-##   xvfb-run -a godot --path games/khamsin --rendering-driver vulkan \
+##   xvfb-run -a godot --path . --rendering-driver vulkan \
 ##     --resolution 1280x720 res://tools/screenshot.tscn -- \
 ##     --out /tmp/shot.png --seed 20260907 --hour 8.5 --drive 4
 ##

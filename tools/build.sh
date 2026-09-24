@@ -12,7 +12,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GODOT="${GODOT:-godot}"
 PRESET="${1:-macOS}"
-BUILD_DIR="$HERE/../../build"
+BUILD_DIR="$HERE/build"
 
 VERSION="$("$GODOT" --headless --version | head -1)"
 echo "Godot: $VERSION"
