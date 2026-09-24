@@ -111,7 +111,7 @@ func _spawn_vehicle() -> void:
 	var wheel_nodes: Array[Node3D] = visuals["wheels"]
 	for node: Node3D in wheel_nodes:
 		vehicle.add_child(node)
-	vehicle.attach_visuals(visuals["chassis"], wheel_nodes)
+	vehicle.attach_visuals(visuals["chassis"], wheel_nodes, visuals)
 	_headlights = visuals["headlights"]
 
 	engine_audio = EngineAudio.new()

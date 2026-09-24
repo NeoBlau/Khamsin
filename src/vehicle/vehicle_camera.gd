@@ -8,11 +8,12 @@ extends Camera3D
 ## решаются пружиной с разной жёсткостью по осям, упреждением по скорости и
 ## полем зрения, растущим с разгоном.
 
-enum Mode { CHASE, HOOD, ORBIT }
+enum Mode { CHASE, COCKPIT, BONNET, ORBIT }
 
 const MODE_NAMES: Dictionary[Mode, String] = {
 	Mode.CHASE: "снаружи",
-	Mode.HOOD: "из кабины",
+	Mode.COCKPIT: "от первого лица",
+	Mode.BONNET: "с капота",
 	Mode.ORBIT: "облёт",
 }
 
@@ -47,12 +48,20 @@ func follow(vehicle: VehicleBody) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion and Input.is_action_pressed(&"free_look"):
+	# От первого лица голова вертится сама: держать клавишу, чтобы посмотреть
+	# в боковое окно, — это ровно то, чего от вида изнутри не ждут.
+	if event is InputEventMouseMotion and (
+		Input.is_action_pressed(&"free_look") or mode == Mode.COCKPIT
+	):
 		var motion := event as InputEventMouseMotion
 		_free_look.x -= motion.relative.x * Settings.mouse_sensitivity * 0.01
 		var vertical := motion.relative.y * Settings.mouse_sensitivity * 0.01
 		_free_look.y += -vertical if Settings.invert_look_y else vertical
 		_free_look.y = clampf(_free_look.y, -0.6, 1.0)
+		if mode == Mode.COCKPIT:
+			# В кабине шея не крутится на триста шестьдесят градусов.
+			_free_look.x = clampf(_free_look.x, -2.1, 2.1)
+			_free_look.y = clampf(_free_look.y, -0.7, 0.55)
 	elif event.is_action_pressed(&"camera_cycle"):
 		cycle_mode()
 
@@ -66,12 +75,17 @@ func cycle_mode() -> void:
 func _physics_process(delta: float) -> void:
 	if target == null or not is_instance_valid(target):
 		return
+	# Голова возвращается вперёд сама, но в кабине — медленно: там ей часто
+	# нужно задержаться, глядя в зеркало или в боковое окно.
 	if not Input.is_action_pressed(&"free_look"):
-		_free_look = _free_look.lerp(Vector2.ZERO, 1.0 - exp(-4.0 * delta))
+		var recentre := 1.4 if mode == Mode.COCKPIT else 4.0
+		_free_look = _free_look.lerp(Vector2.ZERO, 1.0 - exp(-recentre * delta))
 
 	match mode:
-		Mode.HOOD:
-			_update_hood(delta)
+		Mode.COCKPIT:
+			_update_cockpit(delta)
+		Mode.BONNET:
+			_update_bonnet(delta)
 		Mode.ORBIT:
 			_update_orbit(delta)
 		_:
@@ -116,22 +130,53 @@ func _update_chase(delta: float) -> void:
 		look_at(_look_at, _roll_up())
 
 
-func _update_hood(delta: float) -> void:
+## Вид от первого лица: глаза водителя на его месте в кабине. Точка берётся из
+## собранной кабины, а не подбирается числом, — иначе при смене машины камера
+## оказывается в торпедо или за спинкой.
+func _update_cockpit(delta: float) -> void:
 	var xform := target.global_transform
-	var offset := Vector3(-0.42, target.config.body_size.y * 0.62, -target.config.body_size.z * 0.16)
+	var eye: Node3D = target.cabin.get("eye")
+	var local_eye := Vector3(
+		-target.config.body_size.x * 0.22,
+		target.config.body_size.y * 0.60,
+		target.config.body_size.z * 0.055
+	) + target.config.body_offset
+	if eye != null and is_instance_valid(eye):
+		local_eye = target.to_local(eye.global_position)
+	global_transform = Transform3D(
+		xform.basis * Basis(Vector3.UP, _free_look.x) * Basis(Vector3.RIGHT, -_free_look.y),
+		xform * local_eye
+	)
+	_initialised = false
+	_shake(0.0055, 0.6)
+
+
+## С капота: точка над решёткой. Ни кабины, ни рук — видно только дорогу и
+## габариты. Старый добрый вид для тех, кому кабина мешает.
+func _update_bonnet(delta: float) -> void:
+	var xform := target.global_transform
+	var offset := target.config.body_offset + Vector3(
+		0.0, target.config.body_size.y * 0.30, -target.config.body_size.z * 0.34
+	)
 	global_transform = Transform3D(
 		xform.basis * Basis(Vector3.UP, _free_look.x) * Basis(Vector3.RIGHT, -_free_look.y * 0.6),
 		xform * offset
 	)
 	_initialised = false
-	# Тряска кабины: чем хуже дорога, тем сильнее. Считаем по ходу подвески,
-	# а не случайным шумом — на асфальте её честно нет.
+	_shake(0.004, 0.5)
+
+
+## Тряска считается по ходу подвески, а не случайным шумом: на накатке её
+## честно нет, а на гребёнке она появляется сама.
+func _shake(scale: float, yaw_share: float) -> void:
 	var jolt := 0.0
 	for wheel: VehicleWheel in target.wheels:
 		jolt = maxf(jolt, absf(wheel.compression_velocity))
-	var shake := clampf(jolt * 0.004, 0.0, 0.03)
+	var shake := clampf(jolt * scale, 0.0, 0.035)
+	if shake <= 0.0001:
+		return
 	rotate_object_local(Vector3.RIGHT, randf_range(-shake, shake))
-	rotate_object_local(Vector3.UP, randf_range(-shake, shake) * 0.5)
+	rotate_object_local(Vector3.UP, randf_range(-shake, shake) * yaw_share)
 
 
 func _update_orbit(delta: float) -> void:

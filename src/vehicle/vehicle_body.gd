@@ -60,6 +60,14 @@ var _rollover_timer: float = 0.0
 var _previous_velocity: Vector3 = Vector3.ZERO
 var _shock_filtered: float = 0.0
 var _wheel_visuals: Array[Node3D] = []
+## Узлы кабины: руль, рычаг, точка глаз, подсветка приёмника. Заполняется
+## сборщиком кузова. Пустой словарь — машина без нарисованной кабины, и всё,
+## что её касается, просто пропускается.
+var cabin: Dictionary = {}
+## Панели, на которые ложится грязь. Стекло и резина сюда не попадают.
+var paint: Array[MeshInstance3D] = []
+var tail_lamps: Array[MeshInstance3D] = []
+var _tail_base: Array[Color] = []
 var _dust: Array[WheelDust] = []
 var _distance_since_sync: float = 0.0
 
@@ -157,8 +165,15 @@ func _build_collision() -> void:
 	add_child(bed)
 
 
-func attach_visuals(chassis: Node3D, wheel_nodes: Array[Node3D]) -> void:
+func attach_visuals(chassis: Node3D, wheel_nodes: Array[Node3D], extras: Dictionary = {}) -> void:
 	_wheel_visuals = wheel_nodes
+	cabin = extras.get("cabin", {})
+	paint = extras.get("paint", [] as Array[MeshInstance3D])
+	tail_lamps = extras.get("tail_lamps", [] as Array[MeshInstance3D])
+	_tail_base.clear()
+	for lamp: MeshInstance3D in tail_lamps:
+		var material := lamp.material_override as StandardMaterial3D
+		_tail_base.append(material.albedo_color if material != null else Color.BLACK)
 	if chassis != null and chassis.get_parent() == null:
 		add_child(chassis)
 	_build_dust()
@@ -647,6 +662,7 @@ func _publish_telemetry() -> void:
 
 
 func _update_visuals(delta: float) -> void:
+	_update_cabin()
 	for i: int in mini(_wheel_visuals.size(), wheels.size()):
 		var node := _wheel_visuals[i]
 		if node == null:
@@ -656,6 +672,47 @@ func _update_visuals(delta: float) -> void:
 			Basis(Vector3.UP, wheel.steer_angle) * Basis(Vector3.RIGHT, -wheel.spin_angle),
 			to_local(wheel.wheel_centre) if wheel.grounded else _hanging_centre(wheel)
 		)
+
+
+## Руль и рычаг ходят от настоящих значений физики, а не от отдельной
+## анимации. В виде от первого лица это единственное, по чему видно, что
+## машина отвечает на руль: приборы читаются глазами, а руль — боковым зрением.
+func _update_cabin() -> void:
+	if cabin.is_empty():
+		return
+	var wheel_node: Node3D = cabin.get("wheel")
+	if wheel_node != null and is_instance_valid(wheel_node):
+		# Полтора оборота от упора до упора — как на грузовике.
+		wheel_node.rotation.z = -_steer_angle * TAU * 0.75
+	var lever: Node3D = cabin.get("lever")
+	if lever != null and is_instance_valid(lever) and drivetrain != null:
+		# Классическая шахматка: нечётные передачи вперёд, чётные назад,
+		# ряд выбирается поперечным ходом.
+		var gear := drivetrain.gear
+		var row := 0.0 if gear == 0 else (1.0 if gear % 2 == 1 else -1.0)
+		var column := 0.0 if gear == 0 else (float((gear - 1) / 2) - 1.0)
+		if gear < 0:
+			row = -1.0
+			column = 2.0
+		lever.rotation = Vector3(
+			lerp_angle(lever.rotation.x, deg_to_rad(-12.0) * row, 0.25),
+			0.0,
+			lerp_angle(lever.rotation.z, deg_to_rad(-9.0) * column, 0.25)
+		)
+	var glow: Node3D = cabin.get("radio_light")
+	if glow != null and is_instance_valid(glow):
+		glow.visible = Audio.radio.enabled
+	# Стоп-сигналы. Не индикатор, а лампа: она видна снаружи, и по ней сзади
+	# идущий понимает, что вы тормозите.
+	var braking := input.brake > 0.05 or input.handbrake > 0.05
+	for i: int in mini(tail_lamps.size(), _tail_base.size()):
+		var material := tail_lamps[i].material_override as StandardMaterial3D
+		if material == null:
+			continue
+		material.emission_enabled = braking
+		if braking:
+			material.emission = Color(0.9, 0.12, 0.08)
+			material.emission_energy_multiplier = 2.2
 
 
 func _hanging_centre(wheel: VehicleWheel) -> Vector3:

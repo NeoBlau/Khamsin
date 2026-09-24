@@ -159,3 +159,145 @@ static func wheel(radius: float, width: float) -> Node3D:
 	hub_instance.rotation = Vector3(0.0, 0.0, PI * 0.5)
 	root.add_child(hub_instance)
 	return root
+
+
+## Коробка со снятой фаской. Ребро перестаёт быть математически острым и
+## начинает ловить блик — из-за этого силуэт читается объёмным там, где
+## обычный BoxMesh выглядит плоской наклейкой. Стоит это восьми треугольников
+## на угол и ничего больше.
+##
+## Намотка не выводится руками: треугольники складываются в любом порядке, а
+## потом разворачиваются наружу общей функцией. Коробка выпуклая, так что для
+## неё это безошибочно.
+static func bevelled_box_mesh(size: Vector3, bevel: float) -> ArrayMesh:
+	var half := size * 0.5
+	var b := clampf(bevel, 0.0, minf(minf(half.x, half.y), half.z) * 0.9)
+	var vertices := PackedVector3Array()
+	var indices := PackedInt32Array()
+
+	var add_quad := func(a: Vector3, b2: Vector3, c: Vector3, d: Vector3) -> void:
+		var base := vertices.size()
+		vertices.append(a)
+		vertices.append(b2)
+		vertices.append(c)
+		vertices.append(d)
+		indices.append_array([base, base + 1, base + 2, base, base + 2, base + 3])
+
+	var add_tri := func(a: Vector3, b2: Vector3, c: Vector3) -> void:
+		var base := vertices.size()
+		vertices.append(a)
+		vertices.append(b2)
+		vertices.append(c)
+		indices.append_array([base, base + 1, base + 2])
+
+	var inner := Vector3(half.x - b, half.y - b, half.z - b)
+	# Нулевая фаска: рёберные полосы и уголки выродились бы в тридцать два
+	# треугольника нулевой площади. Рисовать их незачем.
+	var flat := b < 0.0005
+
+	# Шесть основных граней, утопленных на фаску.
+	for axis: int in 3:
+		for side: int in 2:
+			var sign_value := 1.0 if side == 0 else -1.0
+			var u := (axis + 1) % 3
+			var v := (axis + 2) % 3
+			var extent := half if flat else inner
+			var corners: Array[Vector3] = []
+			for quadrant: Vector2 in [Vector2(1, 1), Vector2(1, -1), Vector2(-1, -1), Vector2(-1, 1)]:
+				var point := Vector3.ZERO
+				point[axis] = half[axis] * sign_value
+				point[u] = extent[u] * quadrant.x
+				point[v] = extent[v] * quadrant.y
+				corners.append(point)
+			add_quad.call(corners[0], corners[1], corners[2], corners[3])
+
+	# Двенадцать рёберных полос.
+	for axis: int in (0 if flat else 3):
+		var u := (axis + 1) % 3
+		var v := (axis + 2) % 3
+		for su: float in [1.0, -1.0]:
+			for sv: float in [1.0, -1.0]:
+				var a := Vector3.ZERO
+				var b2 := Vector3.ZERO
+				var c := Vector3.ZERO
+				var d := Vector3.ZERO
+				a[axis] = inner[axis]
+				a[u] = half[u] * su
+				a[v] = inner[v] * sv
+				b2[axis] = inner[axis]
+				b2[u] = inner[u] * su
+				b2[v] = half[v] * sv
+				c[axis] = -inner[axis]
+				c[u] = inner[u] * su
+				c[v] = half[v] * sv
+				d[axis] = -inner[axis]
+				d[u] = half[u] * su
+				d[v] = inner[v] * sv
+				add_quad.call(a, b2, c, d)
+
+	# Восемь угловых треугольников.
+	for sx: float in ([] if flat else [1.0, -1.0]):
+		for sy: float in [1.0, -1.0]:
+			for sz: float in [1.0, -1.0]:
+				add_tri.call(
+					Vector3(half.x * sx, inner.y * sy, inner.z * sz),
+					Vector3(inner.x * sx, half.y * sy, inner.z * sz),
+					Vector3(inner.x * sx, inner.y * sy, half.z * sz)
+				)
+
+	orient_outward(vertices, indices)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_INDEX] = indices
+	arrays[Mesh.ARRAY_NORMAL] = face_normals(vertices, indices)
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+## Панель кузова: коробка с фаской, готовая к постановке в сцену.
+static func panel(size: Vector3, colour: Color, roughness: float = 0.6,
+		metallic: float = 0.0, bevel: float = 0.03) -> MeshInstance3D:
+	var instance := MeshInstance3D.new()
+	instance.mesh = bevelled_box_mesh(size, bevel)
+	instance.material_override = standard_material(colour, roughness, metallic)
+	return instance
+
+
+## Стекло. Отдельной функцией, потому что у него другой набор свойств:
+## прозрачность, слабая шероховатость и отключённая тень — стеклянная панель,
+## бросающая плотную тень, сразу выдаёт подделку.
+static func glass(size: Vector3, tint: Color = Color(0.58, 0.66, 0.70, 0.14)) -> MeshInstance3D:
+	var instance := MeshInstance3D.new()
+	instance.mesh = bevelled_box_mesh(size, minf(0.012, size.min_axis_index()))
+	var material := StandardMaterial3D.new()
+	material.albedo_color = tint
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.roughness = 0.05
+	material.metallic = 0.1
+	material.metallic_specular = 0.9
+	# Стекло не должно затенять то, что за ним: с включённым приёмом тени
+	# лобовое стекло кладёт серую плиту на всю дорогу впереди.
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	instance.material_override = material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return instance
+
+
+## Труба: цилиндр с осью вдоль заданного направления. Выхлоп, стойка, поручень.
+static func tube(radius: float, length: float, colour: Color, axis: Vector3 = Vector3.UP,
+		roughness: float = 0.55, metallic: float = 0.5, segments: int = 10) -> MeshInstance3D:
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius
+	mesh.bottom_radius = radius
+	mesh.height = length
+	mesh.radial_segments = segments
+	mesh.rings = 1
+	var instance := MeshInstance3D.new()
+	instance.mesh = mesh
+	instance.material_override = standard_material(colour, roughness, metallic)
+	if not axis.is_equal_approx(Vector3.UP):
+		instance.basis = Basis(Quaternion(Vector3.UP, axis.normalized()))
+	return instance
