@@ -38,7 +38,7 @@ godot --version          # должно быть 4.5.1.stable
 **2. Взять код.**
 
 ```bash
-git clone https://github.com/NeoBlau/khamsin.git
+git clone https://github.com/NeoBlau/Khamsin.git
 cd khamsin
 ```
 
