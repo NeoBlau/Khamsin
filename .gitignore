@@ -7,3 +7,6 @@ export_presets.local.cfg
 
 # Отчёты стенда телеметрии.
 /telemetry/
+
+# Лог запуска, который пишет проверка в CI.
+/run.log

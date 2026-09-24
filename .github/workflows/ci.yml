@@ -33,6 +33,22 @@ jobs:
           mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
           chmod +x godot
 
+      - name: Запуск как в README
+        # На чистом чекауте нет каталога .godot, а значит нет кеша глобальных
+        # классов: автолоады не компилируются и игра уходит в поток ошибок.
+        # Проверяем ровно тот путь, которым игру запускает человек. Шаг обязан
+        # стоять до тестов: tools/test.sh импортирует проект сам и после него
+        # чистоты чекаута уже нет.
+        run: |
+          export PATH="$HOME/godot:$PATH"
+          timeout 120 tools/run.sh --headless > run.log 2>&1 || true
+          if grep -qE "SCRIPT ERROR|Failed to instantiate an autoload" run.log; then
+            echo "::error::Игра не поднимается на чистом чекауте"
+            grep -E "SCRIPT ERROR|Parse Error|Failed to instantiate" run.log | head -20
+            exit 1
+          fi
+          echo "Чистый чекаут запускается без ошибок скриптов."
+
       - name: Прогнать тесты
         run: |
           export PATH="$HOME/godot:$PATH"
