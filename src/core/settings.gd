@@ -8,7 +8,7 @@ extends Node
 signal changed(section: StringName, key: StringName, value: Variant)
 
 const PATH := "user://settings.cfg"
-const BUSES: Array[StringName] = [&"Engine", &"World", &"UI"]
+const BUSES: Array[StringName] = [&"Engine", &"World", &"UI", &"Music", &"Radio", &"Voice"]
 
 enum Units { METRIC, IMPERIAL }
 enum Transmission { AUTOMATIC, MANUAL }
@@ -29,6 +29,9 @@ var volume_master: float = 0.9
 var volume_engine: float = 0.85
 var volume_world: float = 0.8
 var volume_ui: float = 0.7
+var volume_music: float = 0.7
+var volume_radio: float = 0.75
+var volume_voice: float = 0.9
 
 # --- Управление ------------------------------------------------------------
 
@@ -95,6 +98,9 @@ func save_to_disk() -> void:
 	cfg.set_value("audio", "volume_engine", volume_engine)
 	cfg.set_value("audio", "volume_world", volume_world)
 	cfg.set_value("audio", "volume_ui", volume_ui)
+	cfg.set_value("audio", "volume_music", volume_music)
+	cfg.set_value("audio", "volume_radio", volume_radio)
+	cfg.set_value("audio", "volume_voice", volume_voice)
 	cfg.set_value("input", "steer_sensitivity", steer_sensitivity)
 	cfg.set_value("input", "steer_return_rate", steer_return_rate)
 	cfg.set_value("input", "mouse_sensitivity", mouse_sensitivity)
@@ -135,6 +141,9 @@ func _apply_audio() -> void:
 	_set_bus_volume(&"Engine", volume_engine)
 	_set_bus_volume(&"World", volume_world)
 	_set_bus_volume(&"UI", volume_ui)
+	_set_bus_volume(&"Music", volume_music)
+	_set_bus_volume(&"Radio", volume_radio)
+	_set_bus_volume(&"Voice", volume_voice)
 
 
 func _set_bus_volume(bus: StringName, value: float) -> void:

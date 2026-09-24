@@ -48,6 +48,7 @@ func _refresh() -> void:
 		return
 	_speaker.text = dialogue.speaker()
 	_text.text = dialogue.text()
+	Audio.speak_as(dialogue.voice(), dialogue.speaker(), dialogue.text())
 
 	for child: Node in _choices.get_children():
 		child.queue_free()

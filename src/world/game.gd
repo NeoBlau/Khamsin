@@ -19,6 +19,7 @@ var weather: Weather
 var story: StoryDirector
 var cargo: CargoMonitor
 var hud: CanvasLayer
+var engine_audio: EngineAudio
 
 var _loading: Control
 var _poll_timer: float = 0.0
@@ -113,6 +114,10 @@ func _spawn_vehicle() -> void:
 	vehicle.attach_visuals(visuals["chassis"], wheel_nodes)
 	_headlights = visuals["headlights"]
 
+	engine_audio = EngineAudio.new()
+	engine_audio.vehicle = vehicle
+	add_child(engine_audio)
+
 	vehicle.global_transform = _spawn_transform()
 	vehicle.refresh_cargo_mass()
 
@@ -136,6 +141,11 @@ func _process(delta: float) -> void:
 
 	vehicle.wind_velocity = weather.wind_vector()
 	camera.far = sky.draw_distance()
+
+	# Радио слушают из машины: приём считается от её точки, а не от камеры.
+	var here := vehicle.global_position
+	Audio.radio.listen_from(Vector2(here.x, here.z), GameState.time_of_day)
+	Audio.set_wind(clampf(weather.wind_speed / 22.0, 0.0, 1.0), weather.dust)
 
 	_poll_timer += delta
 	if _poll_timer >= SETTLEMENT_POLL:
@@ -176,6 +186,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		EventBus.screen_requested.emit(&"journal", {})
 	elif event.is_action_pressed(&"interact"):
 		_interact()
+	elif event.is_action_pressed(&"radio_toggle"):
+		Audio.radio.toggle()
+		EventBus.notify("Радио %s" % ("включено" if Audio.radio.enabled else "выключено"))
+	elif event.is_action_pressed(&"radio_next"):
+		Audio.radio.step_station(1)
+	elif event.is_action_pressed(&"radio_prev"):
+		Audio.radio.step_station(-1)
 
 
 ## Фары включаются сами в сумерках и в бурю. Ручной выключатель это не отменяет:

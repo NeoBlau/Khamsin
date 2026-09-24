@@ -70,6 +70,11 @@ func speaker() -> String:
 	return String(node().get("speaker", ""))
 
 
+## Идентификатор голоса говорящего. Пусто — голос выведется из имени.
+func voice() -> StringName:
+	return StringName(node().get("voice", ""))
+
+
 func text() -> String:
 	return String(node().get("text", ""))
 

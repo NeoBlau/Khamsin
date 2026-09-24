@@ -26,6 +26,7 @@ var _fuel_fill: StyleBoxFlat
 var _fuel_text: Label
 var _temperature: Label
 var _pressure: Label
+var _radio: Label
 var _cargo: VBoxContainer
 var _clock: Label
 var _weather_line: Label
@@ -148,8 +149,10 @@ func _build_right(root: Control) -> void:
 
 	_temperature = Widgets.label("", 12, UiTheme.INK_DIM)
 	_pressure = Widgets.label("", 12, UiTheme.INK_DIM)
+	_radio = Widgets.label("", 12, UiTheme.SAND)
 	box.add_child(_temperature)
 	box.add_child(_pressure)
+	box.add_child(_radio)
 
 	_cargo = VBoxContainer.new()
 	_cargo.add_theme_constant_override("separation", 2)
@@ -226,6 +229,10 @@ func _update_slow() -> void:
 	if drivetrain.diff_locked:
 		mode.append("блок.")
 	_drive_mode.text = "  ".join(mode)
+
+	var on_air := Audio.radio.now_playing()
+	_radio.text = on_air
+	_radio.visible = not on_air.is_empty()
 
 	var fuel_fraction := vehicle.fuel / maxf(vehicle.config.fuel_capacity, 1.0)
 	_fuel.value = fuel_fraction

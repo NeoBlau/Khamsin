@@ -279,8 +279,13 @@ func test_changing_lod_keeps_the_collision_under_the_wheels() -> void:
 	var detailed := TerrainChunk.build_data(field, Vector2.ZERO, SIZE, 128, CELL, true, false, SEED)
 	chunk.apply_data(detailed, 0, CELL, null, true)
 	check(chunk.has_collision, "сначала коллизия должна появиться")
-	var shape := chunk.get_node("Ground/CollisionShape3D") as CollisionShape3D
+	var shape := chunk.get_node_or_null("Ground/Shape") as CollisionShape3D
+	# Без этой проверки тест проходил впустую: узел не находился, shape был
+	# null, и сравнение null == null ниже давало истину при любой поломке.
+	if not check(shape != null, "узел коллизии находится по пути Ground/Shape"):
+		return
 	var first := shape.shape
+	check(first != null, "форма коллизии создана")
 
 	# Тот же чанк на грубой сетке и без пересчёта коллизии.
 	var coarse := TerrainChunk.build_data(field, Vector2.ZERO, SIZE, 16, CELL, false, false, SEED)

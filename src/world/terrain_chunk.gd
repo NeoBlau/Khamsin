@@ -292,6 +292,9 @@ func _apply_collision(heights: PackedFloat32Array, width: int, cell: float) -> v
 		_body.physics_material_override = material
 		add_child(_body)
 		_collision = CollisionShape3D.new()
+		# Имя задаётся явно: узлу, добавленному из кода без имени, Godot даёт
+		# служебное вида @CollisionShape3D@7, и найти его по пути нельзя.
+		_collision.name = "Shape"
 		_body.add_child(_collision)
 
 	var shape := HeightMapShape3D.new()
