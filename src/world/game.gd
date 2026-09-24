@@ -85,6 +85,7 @@ func _on_world_built() -> void:
 
 	hud = load("res://scenes/ui/hud.tscn").instantiate()
 	hud.name = "Hud"
+	hud.add_to_group(&"ui_layer")
 	add_child(hud)
 	hud.setup(vehicle, weather, story)
 

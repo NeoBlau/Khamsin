@@ -139,6 +139,32 @@ func _ready() -> void:
 		)
 		_game.camera.fov = 70.0
 
+	# Свободная камера: встать в любую точку и смотреть куда сказано. Нужна,
+	# чтобы разглядывать отдельные объекты — камень, верблюда, дом — не
+	# подгоняя к ним грузовик.
+	var eye := _argument("--eye", "")
+	if eye != "":
+		_game.camera.set_physics_process(false)
+		_game.camera.set_process(false)
+		var e := _vector(eye)
+		var target := _vector(_argument("--target", "0,0,0"))
+		if _argument("--eye-relative", "0") == "1":
+			e += _game.vehicle.global_position
+			target += _game.vehicle.global_position
+		if _argument("--on-ground", "0") == "1":
+			e.y += World.height(e.x, e.z)
+			target.y += World.height(target.x, target.z)
+		_game.camera.global_transform = Transform3D(Basis.looking_at(target - e, Vector3.UP), e)
+		_game.camera.fov = float(_argument("--fov", "60"))
+
+	if _argument("--hide-ui", "0") == "1":
+		SceneRouter.close_all()
+		for layer: Node in get_tree().get_nodes_in_group(&"ui_layer"):
+			if layer is CanvasItem:
+				(layer as CanvasItem).visible = false
+			elif layer is CanvasLayer:
+				(layer as CanvasLayer).visible = false
+
 	var screen := _argument("--screen", "")
 	if screen != "":
 		# Сюжет мог сам открыть разговор на въезде в посёлок — для снимка
@@ -195,6 +221,15 @@ func _ready() -> void:
 	print("Чанков: %d загружено, %d в очереди"
 		% [_game.terrain.loaded_chunk_count(), _game.terrain.pending_count()])
 	get_tree().quit()
+
+
+func _vector(text: String) -> Vector3:
+	var parts := text.split(",")
+	return Vector3(
+		float(parts[0]) if parts.size() > 0 else 0.0,
+		float(parts[1]) if parts.size() > 1 else 0.0,
+		float(parts[2]) if parts.size() > 2 else 0.0,
+	)
 
 
 func _argument(name: String, fallback: String) -> String:
