@@ -14,19 +14,85 @@
   <img src="docs/board.png" width="49%" alt="Биржа заказов">
 </p>
 
-## Запуск
+## Запуск на macOS
+
+Нужен macOS 11 и новее на Apple Silicon или 10.15 на Intel, и примерно
+гигабайт свободного места вместе с движком.
+
+**1. Поставить Godot 4.5.1.** Скачать [Godot 4.5.1 Standard для
+macOS](https://godotengine.org/download/macos/), распаковать, перетащить
+`Godot.app` в «Программы». Первый запуск система заблокирует как приложение
+без подписи: снять карантин один раз.
 
 ```bash
-# один раз: поставьте Godot 4.5.1 с godotengine.org
-godot --path games/khamsin --editor      # открыть в редакторе
-godot --path games/khamsin               # просто запустить
+xattr -dr com.apple.quarantine /Applications/Godot.app
 ```
 
-Из корня репозитория:
+Дальше удобно завести короткую команду — все примеры ниже её используют.
 
 ```bash
-games/khamsin/tools/test.sh              # прогнать все тесты (около десяти секунд)
-games/khamsin/tools/build.sh macOS       # собрать .app
+sudo ln -sf /Applications/Godot.app/Contents/MacOS/Godot /usr/local/bin/godot
+godot --version          # должно быть 4.5.1.stable
+```
+
+**2. Взять код.**
+
+```bash
+git clone https://github.com/NeoBlau/NeoShop-.git
+cd NeoShop-
+git checkout claude/3d-game-complexity-level-thmtdy
+```
+
+**3. Запустить.**
+
+```bash
+godot --path games/khamsin
+```
+
+Первый запуск дольше остальных: Godot импортирует ресурсы. Дальше — главное
+меню, «Новый рейс», и через пару секунд вы стоите в Махатте.
+
+Открыть в редакторе, чтобы смотреть и править:
+
+```bash
+godot --path games/khamsin --editor
+```
+
+### Собрать .app
+
+```bash
+games/khamsin/tools/build.sh macOS
+```
+
+Скрипт проверяет версию движка, импортирует ресурсы, прогоняет тесты и кладёт
+универсальный бинарник (Intel + Apple Silicon) в `build/Khamsin.app`, около
+180 мегабайт. Шаблоны экспорта нужны один раз: Godot ставит их сам через
+Editor → Manage Export Templates → Download, а если их нет, скрипт скажет, куда
+положить.
+
+Собранное приложение тоже придётся выпустить из карантина:
+
+```bash
+xattr -dr com.apple.quarantine build/Khamsin.app
+open build/Khamsin.app
+```
+
+### Если тормозит
+
+Настройки меняются в игре, Esc → Настройки:
+
+- масштаб отрисовки 0.75 — самое дешёвое, что можно сделать;
+- тени «низкие» или «выкл»;
+- поле зрения поменьше — в кадр попадает меньше ландшафта.
+
+На M1 и новее в полном разрешении всё идёт без этого. Тяжелее всего первые
+секунды после старта: собирается ближнее кольцо ландшафта.
+
+### Тесты
+
+```bash
+games/khamsin/tools/test.sh              # все, около десяти секунд
+games/khamsin/tools/test.sh --filter tire
 ```
 
 ## Управление

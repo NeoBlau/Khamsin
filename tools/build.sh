@@ -46,11 +46,14 @@ echo "Экспорт пресета «$PRESET»…"
 echo "Готово. Результат в $(cd "$BUILD_DIR" && pwd)"
 ls -la "$BUILD_DIR"
 
+if [ "$PRESET" = "macOS" ]; then
 cat <<'MSG'
 
-На macOS свежескачанное приложение карантинится Gatekeeper. Для локального
-запуска без подписи:
+Собранное приложение macOS карантинит: без подписи оно не запустится, пока
+карантин не снят.
   xattr -dr com.apple.quarantine build/Khamsin.app
+  open build/Khamsin.app
 Для распространения нужны подпись и нотаризация — параметры в export_presets.cfg
-в секции codesign/notarization.
+в секциях codesign и notarization.
 MSG
+fi
