@@ -73,12 +73,22 @@ func _run_file(path: String) -> void:
 			continue
 		case.failures = PackedStringArray()
 		var before := case.checks
+		# Что висело на раннере до теста. Всё, что появится сверху, — его
+		# хозяйство, и убрать его надо гарантированно.
+		var kept := get_children()
 		case.before_each()
 		var result: Variant = case.call(name)
-		# Тест-корутина возвращает сигнал своего завершения — его и ждём.
+		# Тест с await — корутина. Godot возвращает для неё не Signal, а объект
+		# GDScriptFunctionState с сигналом completed. Раннер раньше проверял
+		# только `result is Signal`, не находил его и шёл дальше, не дождавшись
+		# теста: асинхронные тесты молча не выполнялись и всё равно считались
+		# пройденными. Проверяем оба вида.
 		if result is Signal:
 			await result
+		elif result is Object and result != null and (result as Object).has_signal("completed"):
+			await (result as Object).completed
 		case.after_each()
+		await _scrub(kept)
 		_checks += case.checks - before
 		if case.failures.is_empty():
 			_passed += 1
@@ -88,6 +98,36 @@ func _run_file(path: String) -> void:
 			print_rich("  [color=red]✗[/color] %s" % name)
 			for failure: String in case.failures:
 				print_rich("      [color=red]%s[/color]" % failure)
+
+
+## Уборка после теста.
+##
+## Тесты убирают за собой через queue_free, а он срабатывает в конце кадра.
+## Этого мало: следующий тест успевает поставить свою машину ровно туда, где
+## ещё стоит коллизия предыдущего, и получает не чистый стенд, а столкновение
+## двух грузовиков. Выглядит это необъяснимо — подвеска не несёт вес, машина
+## висит в четырёх метрах над землёй и не падает.
+##
+## Поэтому сцена приводится к исходному виду принудительно: всё, что тест
+## добавил на раннер, снимается с дерева. Снятие с дерева, в отличие от
+## queue_free, убирает коллизию из физического мира сразу.
+func _scrub(kept: Array[Node]) -> void:
+	# Открытый экран ставит дерево на паузу — и у следующего теста машина
+	# просто не падает: физика не идёт. Найти это по симптому невозможно,
+	# выглядит как «подвеска не работает». Закрываем всё и снимаем паузу.
+	SceneRouter.close_all()
+	get_tree().paused = false
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# Дальше выходим из физического кадра: менять дерево во время обхода
+	# запросов физики нельзя.
+	await get_tree().process_frame
+	for child: Node in get_children():
+		if kept.has(child):
+			continue
+		remove_child(child)
+		child.queue_free()
+	await get_tree().process_frame
+	await get_tree().physics_frame
 
 
 func _report() -> void:

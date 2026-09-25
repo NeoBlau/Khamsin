@@ -149,6 +149,19 @@ func _needs_collision(coordinate: Vector2i, centre: Vector2i) -> bool:
 	return absi(delta.x) <= collision_radius and absi(delta.y) <= collision_radius
 
 
+## Стример живёт дольше отдельного кадра, но не дольше сцены. Если узел
+## освободить, пока рабочие потоки считают чанки, задача обратится к уже
+## исчезнувшему мьютексу и всё упадёт — при выходе из игры, при возврате в
+## меню и между тестами. Дожидаемся всех задач здесь.
+func _exit_tree() -> void:
+	for coordinate: Vector2i in _jobs.keys():
+		var task: int = _jobs[coordinate]
+		if task >= 0:
+			WorkerThreadPool.wait_for_task_completion(task)
+	_jobs.clear()
+	_results.clear()
+
+
 func _start_jobs() -> void:
 	while _jobs.size() < MAX_JOBS and not _queue.is_empty():
 		var coordinate: Vector2i = _queue.pop_front()

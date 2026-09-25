@@ -17,6 +17,11 @@ var field: TerrainField
 var routes: RouteNetwork
 var settlements: Array[Settlement] = []
 var is_ready: bool = false
+## Сид, под который мир действительно собран. Rng.world_seed этого не заменяет:
+## его переставляют и без пересборки мира — например, начиная новую игру, —
+## и тогда данные рельефа перестают соответствовать номеру. Расхождение
+## незаметно и выглядит как «высота при том же сиде вдруг другая».
+var built_seed: int = 0
 
 var _by_id: Dictionary[StringName, Settlement] = {}
 var _task_id: int = -1
@@ -34,6 +39,7 @@ func build_async(world_seed: int) -> void:
 	if _task_id != -1:
 		return
 	is_ready = false
+	built_seed = 0
 	_pending_seed = world_seed
 	_load_settlements()
 	build_started.emit()
@@ -44,10 +50,17 @@ func build_async(world_seed: int) -> void:
 ## Синхронная сборка. Нужна тестам и стенду телеметрии, где ждать кадры незачем.
 func build_now(world_seed: int) -> void:
 	is_ready = false
+	built_seed = 0
 	_pending_seed = world_seed
 	_load_settlements()
 	_build_worker()
 	_finish()
+
+
+## Собран ли мир под нужный сид. Всем, кто собирается «пересобрать, если надо»,
+## спрашивать надо именно это, а не Rng.world_seed.
+func is_built_for(world_seed: int) -> bool:
+	return is_ready and built_seed == world_seed
 
 
 func _process(_delta: float) -> void:
@@ -63,6 +76,7 @@ func _process(_delta: float) -> void:
 
 func _finish() -> void:
 	is_ready = true
+	built_seed = _pending_seed
 	for settlement: Settlement in settlements:
 		if settlement.known_from_start:
 			GameState.discover_settlement(settlement.id)

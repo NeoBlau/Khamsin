@@ -139,3 +139,41 @@ static func discount(settlement: Settlement) -> float:
 		return 0.0
 	var reputation := GameState.reputation_of(settlement.faction)
 	return clampf(reputation / 100.0 * 0.15, -0.1, 0.15)
+
+
+## --- Мойка ------------------------------------------------------------------
+
+
+## Обмыть водой стоит копейки: вода в эрге дорогая, но её надо немного.
+## Мойка с щётками — это час чужого труда, и стоит она соответственно.
+const WASH_BASE := 12.0
+const WASH_FULL_BASE := 45.0
+const WASH_PER_SPLAT := 18.0
+
+
+static func wash_cost(settlement: Settlement, grime: Grime, full: bool) -> float:
+	if grime == null:
+		return 0.0
+	var markup := settlement.fuel_markup if settlement != null else 1.0
+	var cost := WASH_BASE + grime.dust * 14.0
+	if full:
+		cost = WASH_FULL_BASE + grime.dust * 14.0 + float(grime.splat_count()) * WASH_PER_SPLAT
+	return roundf(cost * markup)
+
+
+## Моет машину и списывает деньги. Возвращает, что удалось отмыть.
+static func wash(settlement: Settlement, grime: Grime, full: bool) -> Dictionary:
+	if grime == null:
+		return {}
+	var cost := wash_cost(settlement, grime, full)
+	if not GameState.spend(cost):
+		EventBus.notify("Не хватает денег на мойку", &"warning")
+		return {}
+	var washed := grime.wash(full)
+	# Мойка — это время: очередь, вода, ожидание, пока стечёт.
+	GameState.advance_time(0.7 if full else 0.25)
+	if full and int(washed.get("splats", 0)) > 0:
+		EventBus.notify("Плевки отмыты. Дядя Валя сделал вид, что ему не впервой")
+	else:
+		EventBus.notify("Машина вымыта")
+	return washed

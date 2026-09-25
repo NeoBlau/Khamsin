@@ -59,6 +59,13 @@ static func _make(
 	return s
 
 
+## Насколько грунт вязнет под ногой, от нуля до единицы. Выводится из того же
+## коэффициента просадки, что и поведение колеса: отдельного числа для
+## пешехода нет и быть не должно, иначе они разойдутся при первой же правке.
+func softness() -> float:
+	return clampf(sink_coefficient / 0.11, 0.0, 1.0)
+
+
 static func library() -> Dictionary[StringName, Surface]:
 	if not _library.is_empty():
 		return _library

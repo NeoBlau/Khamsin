@@ -59,6 +59,9 @@ var _stuck_timer: float = 0.0
 var _rollover_timer: float = 0.0
 var _previous_velocity: Vector3 = Vector3.ZERO
 var _shock_filtered: float = 0.0
+## Пик перегрузки в текущем ударе и время, оставшееся до его закрытия.
+var _shock_peak: float = 0.0
+var _shock_window: float = 0.0
 var _wheel_visuals: Array[Node3D] = []
 ## Узлы кабины: руль, рычаг, точка глаз, подсветка приёмника. Заполняется
 ## сборщиком кузова. Пустой словарь — машина без нарисованной кабины, и всё,
@@ -76,6 +79,9 @@ var _distance_since_sync: float = 0.0
 ## выехать уже невозможно ничем. Убитая подвеска должна возить плохо, а не
 ## запирать игрока насмерть.
 const MIN_SUSPENSION_EFFICIENCY := 0.45
+## Сколько ударов, следующих друг за другом ближе этого времени, считаются
+## одним. Приземление с отскоком — это одно событие, а не три.
+const SHOCK_WINDOW := 0.35
 
 
 func _ready() -> void:
@@ -327,7 +333,11 @@ func _update_steering(delta: float) -> void:
 	var rate := 3.4 if absf(target) > absf(_steer_angle) else Settings.steer_return_rate * 2.0
 	_steer_angle = move_toward(_steer_angle, clampf(target, -1.0, 1.0), rate * delta)
 	var max_angle := config.steer_angle_max * speed_factor
-	_assign_ackermann(_steer_angle * max_angle)
+	# Знак. `input.steer` и `_steer_angle` — то, чего хочет игрок: плюс это
+	# вправо, как и называется клавиша. Поворот вокруг оси Y в Godot
+	# положителен против часовой стрелки, то есть влево. Без этого минуса
+	# машина едет ровно наоборот: жмёшь вправо — уходит влево.
+	_assign_ackermann(-_steer_angle * max_angle)
 
 
 ## Схема Аккермана: внутреннее колесо в повороте стоит круче внешнего, иначе
@@ -528,7 +538,9 @@ func _apply_accumulated(accumulated: Array, xform: Transform3D) -> void:
 	var torque: Vector3 = accumulated[1]
 	# Электронная стабилизация: гасит рыскание моментом вокруг вертикали.
 	if Settings.assist_stability and speed > 4.0:
-		var desired_yaw := forward_speed * tan(_steer_angle * config.steer_angle_max) / _wheelbase()
+		# Минус по той же причине, что и в рулевом управлении: положительный
+		# `_steer_angle` — это «вправо», а рыскание вправо отрицательно.
+		var desired_yaw := -forward_speed * tan(_steer_angle * config.steer_angle_max) / _wheelbase()
 		var actual_yaw := angular_velocity.dot(xform.basis.y)
 		var error := clampf(desired_yaw - actual_yaw, -1.2, 1.2)
 		torque += xform.basis.y * error * mass * 0.9
@@ -591,9 +603,20 @@ func _update_diagnostics(delta: float, velocity: Vector3) -> void:
 	_previous_velocity = velocity
 	var g_force := acceleration.length() / Config.gravity
 	_shock_filtered = maxf(_shock_filtered * 0.86, g_force)
+	# Один удар — одно событие. Физика идёт на ста двадцати герцах, а
+	# приземление длится десятые доли секунды: если засчитывать каждый такт,
+	# где перегрузка выше порога, одно падение с дюны превращается в десяток
+	# ударов и съедает пятую часть ресурса подвески. Копим пик, закрываем
+	# событие, когда тряска улеглась.
 	if _shock_filtered > Config.cargo_shock_threshold_g:
-		_register_shock(_shock_filtered)
-		_shock_filtered = 0.0
+		_shock_peak = maxf(_shock_peak, _shock_filtered)
+		_shock_window = SHOCK_WINDOW
+	elif _shock_peak > 0.0:
+		_shock_window -= delta
+		if _shock_window <= 0.0:
+			_register_shock(_shock_peak)
+			_shock_peak = 0.0
+			_shock_filtered = 0.0
 
 	var upright := global_transform.basis.y.dot(Vector3.UP)
 	if upright < 0.25:

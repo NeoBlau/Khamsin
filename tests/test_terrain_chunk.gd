@@ -160,16 +160,23 @@ func test_truck_rests_on_generated_terrain() -> void:
 	truck.surface_provider = func(point: Vector3) -> Surface: return field.surface_at(point.x, point.z)
 	world.add_child(truck)
 	truck.global_position = Vector3(spot.x, ground + 4.0, spot.y)
+	# Ручник обязателен: точка посадки на склоне, и без него машина за три
+	# секунды укатывается на несколько метров вниз. Раньше этот тест сравнивал
+	# её высоту с землёй в точке старта и объявлял скатывание провалом сквозь
+	# ландшафт — машина при этом всё время честно стояла на поверхности.
+	truck.input.handbrake = 1.0
 	await simulate(3.5)
 
+	var here := truck.global_position
+	var ground_here := field.height(here.x, here.z)
 	var load_per_wheel := truck.mass * Config.gravity / float(truck.wheels.size())
 	var compression := load_per_wheel / truck.config.spring_rate
-	var expected := ground + truck.wheels[0].max_ray_length() - compression
+	var expected := ground_here + truck.wheels[0].max_ray_length() - compression
 	check_near(
-		truck.global_position.y, expected, 1.2,
+		here.y, expected, 0.5,
 		"машина должна стоять на сгенерированной земле, а не над ней и не в ней"
 	)
-	check(truck.global_position.y > ground, "машина не должна проваливаться сквозь ландшафт")
+	check(here.y > ground_here, "машина не должна проваливаться сквозь ландшафт")
 	var grounded := 0
 	for wheel: VehicleWheel in truck.wheels:
 		if wheel.grounded:

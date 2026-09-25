@@ -15,7 +15,7 @@ var _manager: TerrainManager
 
 
 func before_each() -> void:
-	if not World.is_ready or Rng.world_seed != SEED:
+	if not World.is_built_for(SEED):
 		Rng.set_world_seed(SEED)
 		World.build_now(SEED)
 	GameState.new_game(SEED)
@@ -45,14 +45,42 @@ func _spawn(x: float, z: float, heading: float, pressure: float = 2.0) -> void:
 	truck.surface_provider = World.surface_at
 	world.add_child(truck)
 
+	# Машину надо ставить по склону, а не по мировой вертикали. Иначе на
+	# тридцатиградусном барханe её задранный конец оказывается закопанным в
+	# дюну: движок выталкивает её наружу с угловой скоростью под восемь
+	# радиан в секунду, и дальше она просто катится кубарем. Так игра машину
+	# нигде не ставит — это была ошибка стенда, а не физики.
 	var ground := field.height(x, z)
-	truck.global_transform = Transform3D(
-		Basis(Vector3.UP, heading), Vector3(x, ground + 1.4, z)
-	)
+	var normal := _terrain_normal(x, z)
+	var forward := Vector3.FORWARD.rotated(Vector3.UP, heading)
+	var right := forward.cross(normal).normalized()
+	var basis := Basis(right, normal, right.cross(normal).normalized())
+	truck.global_transform = Transform3D(basis, Vector3(x, ground + 1.1, z))
 	truck.set_pressure_all(pressure)
 	manager.begin(field, truck)
 	manager.build_immediate(truck.global_position)
 	await simulate(2.5)
+
+
+## Нормаль рельефа центральными разностями. Шаг в метр: мельче — ловим рябь,
+## крупнее — сглаживаем сам склон.
+func _terrain_normal(x: float, z: float) -> Vector3:
+	var step := 1.0
+	var dx := field.height(x + step, z) - field.height(x - step, z)
+	var dz := field.height(x, z + step) - field.height(x, z - step)
+	return Vector3(-dx, 2.0 * step, -dz).normalized()
+
+
+## Курс вверх по склону. Спущенные колёса выигрывают именно на подъёме: на
+## спуске машину везёт гравитация, и давление там почти ничего не решает.
+func _uphill_heading(x: float, z: float) -> float:
+	var step := 2.0
+	var dx := field.height(x + step, z) - field.height(x - step, z)
+	var dz := field.height(x, z + step) - field.height(x, z - step)
+	if absf(dx) + absf(dz) < 0.0001:
+		return 0.0
+	var uphill := Vector2(dx, dz).normalized()
+	return atan2(-uphill.x, -uphill.y)
 
 
 func _drive(seconds: float, throttle: float, steer: float = 0.0) -> Dictionary:
@@ -75,8 +103,16 @@ func test_settles_on_a_dune_without_falling_through() -> void:
 	var ground := field.height(truck.global_position.x, truck.global_position.z)
 	check_greater(truck.global_position.y, ground - 0.2, "машина не должна провалиться сквозь дюну")
 	check(truck.global_position.y < ground + 2.0, "и не должна висеть над ней")
+	# «Ровно» на дюне — это вдоль склона, а не по мировой вертикали. Склон
+	# наветренной стороны доходит до тридцати трёх градусов, и машина,
+	# идеально лежащая на нём, даёт с вертикалью всего 0.84. Сравнивать надо
+	# с нормалью рельефа под самой машиной.
+	var normal := _terrain_normal(truck.global_position.x, truck.global_position.z)
 	check_greater(
-		truck.global_transform.basis.y.dot(Vector3.UP), 0.9, "на дюне машина стоит ровно"
+		truck.global_transform.basis.y.dot(normal), 0.97, "на дюне машина лежит по склону"
+	)
+	check_greater(
+		truck.global_transform.basis.y.dot(Vector3.UP), 0.75, "и всё же не на боку"
 	)
 
 
@@ -113,7 +149,10 @@ func test_the_truck_actually_moves_on_sand() -> void:
 
 
 func test_low_pressure_beats_high_pressure_on_the_same_dune() -> void:
-	await _spawn(1200.0, -1100.0, 0.0, 2.8)
+	# Курс — вверх по склону дюны. Раньше тест ехал вниз, где машину везёт
+	# гравитация, и разница между давлениями тонула в ней целиком.
+	var uphill := _uphill_heading(1200.0, -1100.0)
+	await _spawn(1200.0, -1100.0, uphill, 2.8)
 	var start_hard := truck.global_position
 	await _drive(12.0, 0.9)
 	var hard := Vector2(
@@ -121,7 +160,7 @@ func test_low_pressure_beats_high_pressure_on_the_same_dune() -> void:
 	).length()
 	after_each()
 
-	await _spawn(1200.0, -1100.0, 0.0, 1.0)
+	await _spawn(1200.0, -1100.0, uphill, 1.0)
 	var start_soft := truck.global_position
 	await _drive(12.0, 0.9)
 	var soft := Vector2(

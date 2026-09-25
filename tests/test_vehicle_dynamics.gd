@@ -241,10 +241,14 @@ func test_landings_do_not_destroy_the_suspension_in_one_go() -> void:
 	await _spawn()
 	truck.global_position += Vector3.UP * 3.5
 	await simulate(3.0)
+	# Одно приземление — одно событие. Раньше детектор срабатывал на каждом
+	# такте физики, пока перегрузка держалась выше порога, и падение с трёх
+	# метров засчитывалось десятком ударов.
 	check_greater(
-		truck.suspension_health, 0.8,
-		"падение с трёх метров не должно съедать пятую часть ресурса подвески"
+		truck.suspension_health, 0.93,
+		"падение с трёх метров — это один удар, а не десять"
 	)
+	check(truck.suspension_health < 1.0, "но бесследно оно не проходит")
 
 
 func test_reaches_a_plausible_top_speed() -> void:

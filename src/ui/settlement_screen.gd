@@ -296,7 +296,60 @@ func _build_services() -> Control:
 		column.add_child(
 			Widgets.caption("Груз портится и во сне: скоропортящееся лучше довезти до отдыха.")
 		)
+
+	if settlement.has_service(&"wash") or settlement.has_service(&"wash_full"):
+		column.add_child(Widgets.separator())
+		column.add_child(Widgets.label("Мойка", 15, UiTheme.SAND))
+		_build_wash(column)
 	return Widgets.scroll(column)
+
+
+## Мойка. Пыль смывают где угодно, верблюжьи плевки — только там, где для них
+## есть щётки и терпение, то есть в оазисе Дяди Вали.
+func _build_wash(column: VBoxContainer) -> void:
+	var grime := _grime()
+	if grime == null:
+		column.add_child(Widgets.label("Мойка закрыта.", 14, UiTheme.INK_FAINT))
+		return
+	var full := settlement.has_service(&"wash_full")
+	column.add_child(
+		Widgets.gauge("Пыль", 1.0 - grime.dust, "%d%%" % roundi(grime.dust * 100.0))
+	)
+	var splats := grime.splat_count()
+	if splats > 0:
+		column.add_child(
+			Widgets.label("Верблюжьих плевков: %d" % splats, 14,
+				UiTheme.SAND if full else UiTheme.WARNING)
+		)
+	var cost := Economy.wash_cost(settlement, grime, full)
+	var do_wash := func() -> void:
+		Economy.wash(settlement, grime, full)
+		_reopen(Tab.SERVICES)
+	var button := Widgets.button(
+		("Мойка с щётками · %s" if full else "Обмыть водой · %s") % Settings.format_money(cost),
+		do_wash
+	)
+	button.disabled = grime.dust < 0.02 and (splats == 0 or not full)
+	if button.disabled:
+		button.text = "машина чистая"
+	column.add_child(button)
+	if full:
+		column.add_child(
+			Widgets.caption("Плевки отходят только здесь: слюна густая и въедается в краску.")
+		)
+	elif splats > 0:
+		column.add_child(
+			Widgets.caption("Плевки водой не берутся. За ними — в оазис Дяди Вали.")
+		)
+
+
+func _grime() -> Grime:
+	if vehicle == null:
+		return null
+	for child: Node in vehicle.get_children():
+		if child is Grime:
+			return child as Grime
+	return null
 
 
 # --- Гараж -----------------------------------------------------------------

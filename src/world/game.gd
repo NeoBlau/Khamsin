@@ -20,6 +20,10 @@ var story: StoryDirector
 var cargo: CargoMonitor
 var hud: CanvasLayer
 var engine_audio: EngineAudio
+var walker: Walker
+var on_foot: bool = false
+var grime: Grime
+var camels: CamelHerd
 
 var _loading: Control
 var _poll_timer: float = 0.0
@@ -32,7 +36,7 @@ var _headlights_on: bool = false
 func _ready() -> void:
 	Catalog.ensure_loaded()
 	_show_loading("Собираем мир…")
-	if World.is_ready and Rng.world_seed == _expected_seed():
+	if World.is_built_for(_expected_seed()):
 		# Отложенно, а не сразу: `_ready` вызывается внутри `add_child`, и
 		# сигнал, выпущенный отсюда напрямую, ушёл бы раньше, чем кто-то успел
 		# на него подписаться.
@@ -62,6 +66,13 @@ func _on_world_built() -> void:
 
 	_spawn_vehicle()
 
+	grime.attach(vehicle, weather)
+
+	camels = CamelHerd.new()
+	camels.name = "Camels"
+	add_child(camels)
+	camels.begin(vehicle)
+
 	cargo = CargoMonitor.new()
 	cargo.name = "CargoMonitor"
 	cargo.weather = weather
@@ -78,6 +89,9 @@ func _on_world_built() -> void:
 	camera.base_fov = Settings.fov
 	add_child(camera)
 	camera.follow(vehicle)
+	# Из кабины видом управляет мышь, значит её надо захватить. Снаружи —
+	# нет, и курсор должен вернуться.
+	camera.mode_changed.connect(func(_mode: VehicleCamera.Mode) -> void: _update_mouse_mode())
 
 	# Ближнее кольцо строим сразу и синхронно: без земли под колёсами машина
 	# успевает улететь в пустоту за те кадры, пока считаются потоки.
@@ -90,7 +104,14 @@ func _on_world_built() -> void:
 	add_child(hud)
 	hud.setup(vehicle, weather, story)
 
+	walker = Walker.new()
+	add_child(walker)
+	walker.activate(false)
+	walker.wants_to_enter_vehicle.connect(board_vehicle)
+
 	EventBus.dialogue_requested.connect(_on_dialogue_requested)
+	SceneRouter.screen_opened.connect(func(_screen: StringName) -> void: _update_mouse_mode())
+	SceneRouter.screen_closed.connect(func(_screen: StringName) -> void: _update_mouse_mode())
 
 	_hide_loading()
 	is_world_ready = true
@@ -118,6 +139,10 @@ func _spawn_vehicle() -> void:
 	engine_audio.vehicle = vehicle
 	add_child(engine_audio)
 
+	# Грязь живёт на самой машине: она её собственность и уезжает вместе с ней.
+	grime = Grime.new()
+	vehicle.add_child(grime)
+
 	vehicle.global_transform = _spawn_transform()
 	vehicle.refresh_cargo_mass()
 
@@ -143,7 +168,7 @@ func _process(delta: float) -> void:
 	camera.far = sky.draw_distance()
 
 	# Радио слушают из машины: приём считается от её точки, а не от камеры.
-	var here := vehicle.global_position
+	var here := walker.global_position if on_foot else vehicle.global_position
 	Audio.radio.listen_from(Vector2(here.x, here.z), GameState.time_of_day)
 	Audio.set_wind(clampf(weather.wind_speed / 22.0, 0.0, 1.0), weather.dust)
 
@@ -193,6 +218,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		Audio.radio.step_station(1)
 	elif event.is_action_pressed(&"radio_prev"):
 		Audio.radio.step_station(-1)
+	elif event.is_action_pressed(&"exit_vehicle") and not on_foot:
+		leave_vehicle()
 
 
 ## Фары включаются сами в сумерках и в бурю. Ручной выключатель это не отменяет:
@@ -219,6 +246,81 @@ func _check_settlement() -> void:
 	GameState.discover_settlement(id)
 	vehicle.sync_to_state()
 	EventBus.settlement_entered.emit(id)
+
+
+# --- Пешком ----------------------------------------------------------------
+
+
+## Выйти из машины. Только на стоянке: выпрыгивать на ходу — это отдельная
+## механика с отдельными последствиями, и в курьерском симуляторе она лишняя.
+func leave_vehicle() -> bool:
+	if on_foot:
+		return false
+	# Судим по горизонтальной скорости, а не по полной. Полная включает
+	# вертикальную: машина, осевшая на подвеске после прыжка с дюны, стоит на
+	# месте, но `speed` у неё несколько метров в секунду, и дверь не
+	# открывается без видимой причины.
+	var drift := Vector3(vehicle.linear_velocity.x, 0.0, vehicle.linear_velocity.z).length()
+	if drift > 1.2:
+		EventBus.notify("Сначала остановитесь")
+		return false
+	on_foot = true
+	vehicle.player_controlled = false
+	vehicle.input.throttle = 0.0
+	vehicle.input.brake = 0.0
+	vehicle.input.handbrake = 1.0
+	vehicle.sync_to_state()
+
+	walker.place_at(Transform3D(vehicle.global_transform.basis, _door_position()))
+	walker.activate(true)
+	camera.current = false
+	_update_mouse_mode()
+	EventBus.notify("Вы вышли из машины. G — сесть обратно")
+	return true
+
+
+## Сесть обратно. Дверь не телепорт: до машины надо дойти.
+func board_vehicle() -> bool:
+	if not on_foot:
+		return false
+	var reach := walker.global_position.distance_to(vehicle.global_position)
+	if reach > _boarding_distance():
+		EventBus.notify("До машины ещё идти")
+		return false
+	on_foot = false
+	walker.activate(false)
+	vehicle.player_controlled = true
+	vehicle.input.handbrake = 0.0
+	camera.current = true
+	_update_mouse_mode()
+	EventBus.notify("За рулём")
+	return true
+
+
+## Где именно игрок оказывается, выйдя из кабины: у водительской двери, а не
+## в центре машины и не под ней.
+func _door_position() -> Vector3:
+	var xform := vehicle.global_transform
+	var size := vehicle.config.body_size
+	var beside := xform.basis.x * (-size.x * 0.5 - 0.7)
+	var along := -xform.basis.z * (-size.z * 0.5 + size.z * 0.34)
+	var spot := xform.origin + beside + along
+	return Vector3(spot.x, World.height(spot.x, spot.z) + 0.15, spot.z)
+
+
+## Радиус посадки считается от габарита машины, а не фиксированным числом:
+## у маршрутки и у шеститонника он разный.
+func _boarding_distance() -> float:
+	var size := vehicle.config.body_size
+	return maxf(size.x, size.z) * 0.5 + 2.2
+
+
+## Мышь захватывается, когда ей управляют видом: пешком и из кабины. Как
+## только открыт любой экран — отпускается, иначе по кнопкам не попасть.
+func _update_mouse_mode() -> void:
+	var wants_capture := (on_foot or camera.mode == VehicleCamera.Mode.COCKPIT) \
+		and not SceneRouter.is_overlay_open()
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if wants_capture else Input.MOUSE_MODE_VISIBLE
 
 
 func current_settlement() -> Settlement:

@@ -102,10 +102,12 @@ func _surface_loudness() -> float:
 			return 1.0
 		&"gravel":
 			return 0.9
-		&"track":
+		&"track", &"asphalt":
 			return 0.72
-		&"soft_sand":
-			return 0.34
+		&"sand_soft":
+			return 0.30
+		&"sand_firm":
+			return 0.42
 		_:
 			return 0.5
 

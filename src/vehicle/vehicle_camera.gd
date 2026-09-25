@@ -8,6 +8,8 @@ extends Camera3D
 ## решаются пружиной с разной жёсткостью по осям, упреждением по скорости и
 ## полем зрения, растущим с разгоном.
 
+signal mode_changed(mode: Mode)
+
 enum Mode { CHASE, COCKPIT, BONNET, ORBIT }
 
 const MODE_NAMES: Dictionary[Mode, String] = {
@@ -69,6 +71,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func cycle_mode() -> void:
 	mode = ((mode + 1) % Mode.size()) as Mode
 	_initialised = false
+	mode_changed.emit(mode)
 	EventBus.notify("Камера: %s" % MODE_NAMES[mode])
 
 

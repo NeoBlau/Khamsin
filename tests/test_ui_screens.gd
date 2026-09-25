@@ -12,7 +12,7 @@ var _vehicle: VehicleBody
 
 
 func before_each() -> void:
-	if not World.is_ready or Rng.world_seed != SEED:
+	if not World.is_built_for(SEED):
 		Rng.set_world_seed(SEED)
 		World.build_now(SEED)
 	GameState.new_game(SEED)
