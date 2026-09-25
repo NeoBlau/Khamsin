@@ -14,6 +14,9 @@ const TOAST_LIFETIME := 4.5
 var vehicle: VehicleBody
 var weather: Weather
 var story: StoryDirector
+## Сцена мира. Нужна для двух вещей: подсказки «к чему можно подойти» пешком
+## и грязи на стекле, которую видно только из кабины.
+var game: Node3D
 
 var _speed: Label
 var _speed_unit: Label
@@ -27,6 +30,8 @@ var _fuel_text: Label
 var _temperature: Label
 var _pressure: Label
 var _radio: Label
+var _reach: Label
+var _windscreen: ColorRect
 var _cargo: VBoxContainer
 var _clock: Label
 var _weather_line: Label
@@ -39,7 +44,9 @@ var _slow_timer: float = 0.0
 var _warning_state: Dictionary[StringName, bool] = {}
 
 
-func setup(target: VehicleBody, sky_weather: Weather, director: StoryDirector) -> void:
+func setup(target: VehicleBody, sky_weather: Weather, director: StoryDirector,
+		world_scene: Node3D = null) -> void:
+	game = world_scene
 	vehicle = target
 	weather = sky_weather
 	story = director
@@ -57,6 +64,7 @@ func _ready() -> void:
 	_build_left(root)
 	_build_right(root)
 	_build_centre(root)
+	_build_reach(root)
 
 	EventBus.notification_posted.connect(_on_notification)
 	EventBus.vehicle_stuck_changed.connect(_on_stuck)
@@ -160,6 +168,27 @@ func _build_right(root: Control) -> void:
 	root.add_child(box)
 
 
+## Подсказка о том, к чему можно подойти, и грязь на стекле.
+##
+## Подсказка спрашивает у сцены ровно ту же функцию, что и обработчик клавиши:
+## написанное в подсказке и сделанное по нажатию не могут разойтись, потому
+## что это один и тот же ответ.
+func _build_reach(root: Control) -> void:
+	_windscreen = ColorRect.new()
+	_windscreen.color = Color(0.62, 0.56, 0.44, 0.0)
+	_windscreen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_windscreen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_windscreen)
+
+	_reach = Widgets.label("", 15, UiTheme.SAND)
+	_reach.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_reach.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_reach.position = Vector2(-220.0, -150.0)
+	_reach.custom_minimum_size = Vector2(440.0, 0.0)
+	_reach.visible = false
+	root.add_child(_reach)
+
+
 func _build_centre(root: Control) -> void:
 	_warnings = VBoxContainer.new()
 	_warnings.set_anchors_preset(Control.PRESET_CENTER_TOP)
@@ -230,6 +259,8 @@ func _update_slow() -> void:
 		mode.append("блок.")
 	_drive_mode.text = "  ".join(mode)
 
+	_update_reach()
+
 	var on_air := Audio.radio.now_playing()
 	_radio.text = on_air
 	_radio.visible = not on_air.is_empty()
@@ -257,6 +288,34 @@ func _update_slow() -> void:
 
 
 ## Запас хода по фактическому расходу за последние минуты, а не по паспортному.
+## Подсказка и грязь на стекле. Обе вещи зависят от того, где игрок и чем он
+## сейчас смотрит, поэтому считаются вместе.
+func _update_reach() -> void:
+	if game == null or not is_instance_valid(game):
+		return
+	var on_foot: bool = game.on_foot
+	if on_foot:
+		var target: Dictionary = game.reachable()
+		if target.is_empty():
+			_reach.visible = false
+		else:
+			_reach.visible = true
+			_reach.text = "F — %s" % String(target.get("name", "действие"))
+	else:
+		_reach.visible = false
+
+	# Грязь на стекле видно только изнутри: снаружи она на кузове, а не на
+	# камере. Из кабины она честно мешает смотреть — и это тот самый повод
+	# доехать до мойки.
+	var dirty := 0.0
+	var camera: VehicleCamera = game.camera
+	if not on_foot and camera != null and camera.mode == VehicleCamera.Mode.COCKPIT:
+		var grime: Grime = game.grime
+		if grime != null and is_instance_valid(grime):
+			dirty = grime.windscreen_grime()
+	_windscreen.color.a = clampf(dirty * 0.34, 0.0, 0.34)
+
+
 func _range_estimate() -> String:
 	var rate := vehicle.drivetrain.fuel_rate
 	var speed := absf(vehicle.forward_speed) * 3.6

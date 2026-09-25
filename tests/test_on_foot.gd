@@ -127,3 +127,48 @@ func test_soft_sand_slows_walking() -> void:
 	check(firm.softness() < soft.softness(), "камень твёрже рыхлого песка")
 	check_near(firm.softness(), 0.0, 0.001, "по камню идётся без потерь")
 	check(soft.softness() > 0.9, "рыхлый песок вязнет почти полностью")
+
+
+# --- Взаимодействие ---------------------------------------------------------
+
+
+## Подсказка в интерфейсе и действие по клавише обязаны совпадать: они
+## спрашивают одну и ту же функцию, и расходиться им негде.
+func test_what_you_can_reach_is_what_you_get() -> void:
+	await _start()
+	check(game.reachable().is_empty(), "за рулём подходить не к чему")
+	check(game.leave_vehicle(), "вышли")
+	var target: Dictionary = game.reachable()
+	check(not target.is_empty(), "у машины есть к чему подойти")
+	check_equal(StringName(target["what"]), &"vehicle", "это машина")
+	check(String(target.get("name", "")).length() > 0, "у неё есть название для подсказки")
+
+	# Отошли — подсказка пропала.
+	var far: Vector3 = game.vehicle.global_position + Vector3(30.0, 0.0, 0.0)
+	game.walker.global_position = Vector3(far.x, World.height(far.x, far.z) + 0.2, far.z)
+	check(game.reachable().is_empty(), "издалека подходить не к чему")
+
+
+## Чужой дом заперт, и это должно быть видно раньше, чем игрок в него упрётся.
+func test_a_house_you_do_not_own_stays_shut() -> void:
+	Homes.ensure_loaded()
+	await _start()
+	var locked: Homes.Home = null
+	for home: Homes.Home in Homes.all():
+		if not home.is_owned():
+			locked = home
+	if not check(locked != null, "есть дом, который ещё не наш"):
+		return
+	# Список, а не bool: лямбда в GDScript захватывает локальные переменные по
+	# значению, и присваивание внутри неё снаружи не видно. Массив
+	# захватывается по ссылке, поэтому append работает.
+	var seen: Array[StringName] = []
+	var probe := func(screen: StringName, _payload: Dictionary) -> void:
+		seen.append(screen)
+	EventBus.screen_requested.connect(probe)
+	game._enter_home(locked.id)
+	check(not seen.has(&"garage"), "гараж чужого дома не открывается")
+	Homes.give(locked.id)
+	game._enter_home(locked.id)
+	check(seen.has(&"garage"), "свой — открывается")
+	EventBus.screen_requested.disconnect(probe)

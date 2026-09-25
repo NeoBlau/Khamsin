@@ -114,7 +114,7 @@ func _on_world_built() -> void:
 	hud.name = "Hud"
 	hud.add_to_group(&"ui_layer")
 	add_child(hud)
-	hud.setup(vehicle, weather, story)
+	hud.setup(vehicle, weather, story, self)
 
 	walker = Walker.new()
 	add_child(walker)
@@ -287,7 +287,7 @@ func leave_vehicle() -> bool:
 	walker.activate(true)
 	camera.current = false
 	_update_mouse_mode()
-	EventBus.notify("Вы вышли из машины. G — сесть обратно")
+	EventBus.notify("Вы вышли из машины. X — сесть обратно, F — взаимодействие")
 	return true
 
 
@@ -345,12 +345,96 @@ func _on_dialogue_requested(dialogue_id: StringName) -> void:
 	EventBus.screen_requested.emit(&"dialogue", {"dialogue": String(dialogue_id)})
 
 
+## Взаимодействие. Из машины — это по-прежнему «въехал в посёлок, открылась
+## биржа». Пешком — по тому, к чему подошёл: у двери мастерской открывается
+## мастерская, у почты — почта, у своего дома — гараж, у машины — посадка.
+##
+## Одна клавиша на всё сознательно: список того, что можно сделать, виден в
+## подсказке над прицелом, и лишний выбор между «войти» и «поговорить» тут
+## ничего не даёт.
 func _interact() -> void:
+	if on_foot:
+		_interact_on_foot()
+		return
 	var here := current_settlement()
 	if here == null:
 		EventBus.notify("Здесь не с кем говорить", &"warning")
 		return
 	EventBus.screen_requested.emit(&"contracts", {"settlement": String(here.id)})
+
+
+func _interact_on_foot() -> void:
+	var target := reachable()
+	if target.is_empty():
+		EventBus.notify("Здесь не к чему подойти", &"warning")
+		return
+	match StringName(target["what"]):
+		&"vehicle":
+			board_vehicle()
+		&"door":
+			_enter_building(target["door"])
+		_:
+			EventBus.notify("Ничего не происходит")
+
+
+## Что сейчас в досягаемости пешего игрока. Возвращает пустой словарь, если
+## ничего. Тот же вызов использует подсказка в интерфейсе — чтобы написанное
+## в подсказке и сделанное по клавише не разошлись.
+func reachable() -> Dictionary:
+	if not on_foot or walker == null:
+		return {}
+	var from := walker.global_position
+	if from.distance_to(vehicle.global_position) < _boarding_distance():
+		return {"what": &"vehicle", "name": vehicle.config.display_name}
+	if places != null:
+		var doors := places.doors_near(from, 5.0)
+		if not doors.is_empty():
+			var best: Dictionary = doors[0]
+			for door: Dictionary in doors:
+				if (door["world"] as Vector3).distance_to(from) \
+					< (best["world"] as Vector3).distance_to(from):
+					best = door
+			return {"what": &"door", "name": best["name"], "door": best}
+	return {}
+
+
+func _enter_building(door: Dictionary) -> void:
+	var settlement_id := StringName(door.get("settlement", ""))
+	var kind := StringName(door.get("kind", ""))
+	var payload := {"settlement": String(settlement_id)}
+	match kind:
+		&"guild", &"post":
+			EventBus.screen_requested.emit(&"contracts", payload)
+		&"workshop", &"market", &"guesthouse":
+			EventBus.screen_requested.emit(&"settlement", payload)
+		&"majlis":
+			EventBus.screen_requested.emit(&"settlement", payload)
+		&"mansion":
+			if bool(GameState.flag(&"met_valya")):
+				EventBus.dialogue_requested.emit(&"valya_first_meeting")
+			else:
+				EventBus.notify("Дверь закрыта. Хозяин, видимо, в эфире")
+		&"home":
+			_enter_home(StringName(door.get("home", "")))
+		_:
+			EventBus.notify(String(door.get("name", "Дверь")))
+
+
+func _enter_home(home_id: StringName) -> void:
+	var home := Homes.get_by_id(home_id)
+	if home == null:
+		return
+	if not home.is_owned():
+		if home.is_available() and home.price > 0.0:
+			EventBus.notify("%s — продаётся за %s. Спросите в посёлке."
+				% [home.name, Settings.format_money(home.price)])
+		else:
+			EventBus.notify("Дверь заперта. Это не ваш дом")
+		return
+	EventBus.screen_requested.emit(&"garage", {
+		"home": String(home_id),
+		"settlement": String(home.settlement),
+	})
 
 
 func _show_loading(text: String) -> void:

@@ -160,6 +160,24 @@ func _ready() -> void:
 		_game.camera.global_transform = Transform3D(Basis.looking_at(target - e, Vector3.UP), e)
 		_game.camera.fov = float(_argument("--fov", "60"))
 
+	# Пеший вид: выходим из машины и, если попросили, отходим от неё.
+	if _argument("--on-foot", "0") == "1":
+		SceneRouter.close_all()
+		get_tree().paused = false
+		_game.vehicle.linear_velocity = Vector3.ZERO
+		_game.leave_vehicle()
+		var walk := _vector(_argument("--walk", "0,0,0"))
+		if walk.length() > 0.01:
+			var spot: Vector3 = _game.walker.global_position + walk
+			_game.walker.global_position = Vector3(
+				spot.x, World.height(spot.x, spot.z) + 0.2, spot.z
+			)
+		var facing := float(_argument("--face", "1e9"))
+		if facing < 1e8:
+			_game.walker.rotation.y = deg_to_rad(facing)
+		for _i: int in 20:
+			await get_tree().physics_frame
+
 	# Посёлки собираются по кадрам с бюджетом: для снимка это значит половину
 	# домов в кадре. Инструменту ждать незачем — достраиваем разом.
 	if _game.places != null:

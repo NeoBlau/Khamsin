@@ -55,6 +55,57 @@ func _reopen(tab: Tab) -> void:
 		_tabs.current_tab = int(tab)
 
 
+## Свой дом: ночлег без денег и гараж, который помнит, что в нём стоит.
+##
+## Раздел появляется, только когда игрок вошёл именно в свой дом. В чужом
+## посёлке его нет, и это не ограничение интерфейса, а суть механики: гараж
+## привязан к месту, и вторая машина ждёт там, где её оставили.
+func _build_home_section(column: VBoxContainer) -> void:
+	var home_id := StringName(payload.get("home", ""))
+	if home_id == &"":
+		return
+	var home := Homes.get_by_id(home_id)
+	if home == null or not home.is_owned():
+		return
+
+	column.add_child(Widgets.label(home.name, 16, UiTheme.SAND))
+	column.add_child(Widgets.caption(home.description))
+
+	var stored := Homes.stored(home_id)
+	column.add_child(Widgets.label(
+		"Гараж: занято %d из %d" % [stored.size(), home.garage_slots], 14, UiTheme.INK_DIM
+	))
+	for id: StringName in stored:
+		var config := Catalog.vehicle(id)
+		var name := config.display_name if config != null else String(id)
+		var take := func() -> void:
+			if Homes.take(home_id, id):
+				EventBus.notify("%s выкатили из гаража" % name)
+				_reopen(Tab.GARAGE)
+		column.add_child(Widgets.row([
+			Widgets.label(name, 14, UiTheme.INK_DIM),
+			Widgets.button("Выкатить", take),
+		], 12))
+
+	# Поставить текущую машину можно только на своих колёсах и только если
+	# есть место: гараж на одну машину и есть причина искать второй дом.
+	if vehicle != null and Homes.free_slots(home_id) > 0:
+		var park := func() -> void:
+			if Homes.store(home_id, GameState.vehicle_id):
+				EventBus.notify("%s в гараже" % vehicle.config.display_name)
+				_reopen(Tab.GARAGE)
+		column.add_child(Widgets.button("Поставить %s" % vehicle.config.display_name, park))
+	elif vehicle != null:
+		column.add_child(Widgets.label("Мест в гараже нет", 13, UiTheme.INK_FAINT))
+
+	var sleep := func() -> void:
+		GameState.advance_time(8.0)
+		EventBus.notify("Вы выспались дома")
+		_reopen(Tab.GARAGE)
+	column.add_child(Widgets.button("Переночевать (бесплатно, 8 ч)", sleep))
+	column.add_child(Widgets.separator())
+
+
 func _vehicle_position() -> Vector3:
 	var found := _find_vehicle()
 	return found.global_position if found != null else Vector3.ZERO
@@ -359,6 +410,7 @@ func _build_garage() -> Control:
 	column.name = "Гараж"
 	column.add_theme_constant_override("separation", 8)
 
+	_build_home_section(column)
 	column.add_child(Widgets.label("Давление в шинах", 15, UiTheme.SAND))
 	var pressure := vehicle.wheels[0].pressure if vehicle != null else 2.4
 	var slider := HSlider.new()

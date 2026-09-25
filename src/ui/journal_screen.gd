@@ -50,6 +50,8 @@ func build_body() -> void:
 		)
 	column.add_child(Widgets.separator())
 
+	_build_finds(column)
+
 	column.add_child(Widgets.label("Итоги", 16, UiTheme.SAND))
 	column.add_child(Widgets.field("Пройдено", Settings.format_distance(
 		float(GameState.stats.get("distance_driven", 0.0))
@@ -59,6 +61,22 @@ func build_body() -> void:
 	column.add_child(Widgets.field("Провалено", str(GameState.stats.get("failures", 0))))
 	column.add_child(Widgets.field("Переворотов", str(GameState.stats.get("rollovers", 0))))
 	body.add_child(Widgets.scroll(column))
+
+
+## Находки. Показывается только найденное: список того, чего вы ещё не видели,
+## превращает находки в чек-лист, а они не для этого.
+func _build_finds(column: VBoxContainer) -> void:
+	var notes: Array = GameState.flag(&"found_notes", [])
+	if notes.is_empty():
+		return
+	column.add_child(Widgets.label("Находки", 16, UiTheme.SAND))
+	for entry: Variant in notes:
+		if not (entry is Dictionary):
+			continue
+		var note := entry as Dictionary
+		column.add_child(Widgets.label(String(note.get("name", "")), 14, UiTheme.INK))
+		column.add_child(Widgets.caption(String(note.get("note", ""))))
+	column.add_child(Widgets.separator())
 
 
 func _faction_name(faction: StringName) -> String:
