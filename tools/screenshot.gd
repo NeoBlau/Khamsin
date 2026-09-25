@@ -157,6 +157,12 @@ func _ready() -> void:
 		_game.camera.global_transform = Transform3D(Basis.looking_at(target - e, Vector3.UP), e)
 		_game.camera.fov = float(_argument("--fov", "60"))
 
+	# Посёлки собираются по кадрам с бюджетом: для снимка это значит половину
+	# домов в кадре. Инструменту ждать незачем — достраиваем разом.
+	if _game.places != null:
+		_game.places._refresh()
+		_game.places.finish_all()
+
 	if _argument("--hide-ui", "0") == "1":
 		SceneRouter.close_all()
 		for layer: Node in get_tree().get_nodes_in_group(&"ui_layer"):

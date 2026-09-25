@@ -57,8 +57,15 @@ func _run_file(path: String) -> void:
 		print_rich("[color=red]  не загрузился %s[/color]" % path)
 		return
 	var instance: Object = script.new()
+	if instance == null:
+		# Файл с ошибкой разбора грузится, но не создаётся. Раньше это уходило
+		# в тишину: тест просто не выполнялся, а набор оставался зелёным.
+		_failed += 1
+		print_rich("[color=red]  ✗ %s не собрался: смотрите ошибки разбора выше[/color]" % path)
+		return
 	if not instance is TestCase:
-		print_rich("[color=yellow]  пропущен %s: не наследует TestCase[/color]" % path)
+		_failed += 1
+		print_rich("[color=red]  ✗ %s не наследует TestCase[/color]" % path)
 		return
 	var case := instance as TestCase
 	case.host = self
