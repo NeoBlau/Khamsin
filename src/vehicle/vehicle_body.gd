@@ -27,6 +27,7 @@ const STUCK_TIME := 3.0
 
 var config: VehicleConfig
 var wheels: Array[VehicleWheel] = []
+var _warned_about_brakes: bool = false
 var drivetrain: Drivetrain
 var input: VehicleInput = VehicleInput.new()
 ## Команда после помощников. В неё пишут АБС и противобуксовочная, а `input`
@@ -445,6 +446,11 @@ func _apply_brakes(delta: float) -> void:
 		var torque := config.brake_torque * demand * wheel.spec.brake_bias * 2.0
 		if wheel.spec.handbrake:
 			torque = maxf(torque, config.handbrake_torque * handbrake)
+		# Нагрев колодок и потеря тормозов вместе с ним. Спуск с дюны на одних
+		# тормозах — самый быстрый способ остаться без них, и игра обязана это
+		# показывать: иначе пониженная передача не нужна вовсе.
+		wheel.update_brake_heat(torque, delta)
+		torque *= TireModel.brake_fade(wheel.brake_temperature)
 		# ABS отпускает конкретное колесо, а не тормоз целиком.
 		if Settings.assist_abs and demand > 0.05 and wheel.grounded:
 			var locking := wheel.slip_ratio < -0.22 and absf(wheel.contact_speed_long) > 2.0
@@ -526,6 +532,12 @@ func _simulate_tires(xform: Transform3D, delta: float) -> Array:
 			var force: Vector3 = frame[0] * (longitudinal + rolling) + frame[1] * wheel.force_lateral
 			total_force += force / float(SUBSTEPS)
 			total_torque += (frame[3] as Vector3).cross(force) / float(SUBSTEPS)
+			# Стабилизирующий момент. Боковая сила приложена позади оси колеса,
+			# и разворачивает машину обратно на курс. Момент вокруг нормали к
+			# грунту, а не вокруг мировой вертикали: на склоне это разные оси.
+			total_torque += (
+				(frame[2] as Vector3) * wheel.aligning_moment / float(SUBSTEPS)
+			)
 
 	for wheel: VehicleWheel in wheels:
 		wheel.update_wear(delta)
@@ -676,12 +688,31 @@ func _publish_telemetry() -> void:
 	Telemetry.set_scalar(&"clutch", drivetrain.clutch_engagement)
 	var load := 0.0
 	var sink := 0.0
+	var brakes := 0.0
+	var loose := 0.0
 	for wheel: VehicleWheel in wheels:
 		load += wheel.load
 		sink = maxf(sink, wheel.sinkage)
+		brakes = maxf(brakes, wheel.brake_temperature)
+		loose = maxf(loose, wheel.ground_looseness)
 	Telemetry.set_scalar(&"load", load)
 	Telemetry.set_scalar(&"sinkage", sink)
+	Telemetry.set_scalar(&"brakes", brakes)
+	Telemetry.set_scalar(&"sand_loose", loose)
+	_warn_about_brakes(brakes)
 	telemetry_updated.emit()
+
+
+## Про выцветающие тормоза игрок должен узнать до того, как они не сработают.
+## Предупреждение одно на нагрев: повторять его каждый кадр — значит забить им
+## всю ленту сообщений ровно тогда, когда игроку не до чтения.
+func _warn_about_brakes(temperature: float) -> void:
+	var fading := temperature > TireModel.BRAKE_FADE_START + 60.0
+	if fading and not _warned_about_brakes:
+		_warned_about_brakes = true
+		EventBus.notify("Тормоза перегрелись. Включите пониженную.")
+	elif not fading and temperature < TireModel.BRAKE_FADE_START * 0.7:
+		_warned_about_brakes = false
 
 
 func _update_visuals(delta: float) -> void:

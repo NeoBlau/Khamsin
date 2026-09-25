@@ -5,6 +5,11 @@ extends RefCounted
 ## Не узел сцены — узлов ровно столько, сколько нужно для картинки, а вся
 ## механика живёт в обычных объектах. Так проще гонять её в тестах без сцены.
 
+## Постоянная времени фильтра просадки, секунды. Смысл — сколько песок
+## «догоняет» изменившуюся нагрузку. Меньше — и удар снова штампует яму,
+## больше — и стоящая машина слишком долго не садится в грунт.
+const SINKAGE_SETTLE_TAU := 0.33
+
 var spec: VehicleConfig.WheelSpec
 var config: VehicleConfig
 
@@ -56,6 +61,27 @@ var temperature: float = 30.0
 var grip_from_heat: float = 1.0
 ## Развал колеса, радианы. Отрицательный — верх колеса к машине.
 var camber: float = 0.0
+## Просадка, отфильтрованная по времени, метры.
+##
+## В грунт пишется она, а не мгновенная. Причина физическая: пластическая
+## деформация идёт за длительной нагрузкой, а не за пиком. Удар при приземлении
+## длится миллисекунды, и формула просадки выдаёт на нём полметра — но песок
+## за это время столько материала в стороны не вытеснит.
+##
+## Без фильтра это ловится сразу: машина, упавшая с четырёх метров, штампует
+## под собой яму предельной глубины, два колеса повисают в воздухе, и дальше
+## она никуда не едет. Постоянная времени — треть секунды.
+var sinkage_settled: float = 0.0
+## Рыхлость песка под колесом, 0..1. Своя же колея, разрытая буксованием,
+## возвращается сюда следующим проходом и топит колесо глубже.
+var ground_looseness: float = 0.0
+## Насколько колесо просело в чужой или свой след, метры. Для звука и пыли.
+var track_offset: float = 0.0
+## Стабилизирующий момент вокруг нормали к грунту, Н·м.
+var aligning_moment: float = 0.0
+## Температура тормозного механизма, °C. Своя у каждого колеса: передние
+## греются сильнее, и именно они отказывают первыми.
+var brake_temperature: float = 35.0
 
 
 
@@ -98,6 +124,7 @@ func probe(
 		load = 0.0
 		# Колесо в воздухе — подвеска распрямляется, но не рывком.
 		compression = maxf(compression - 6.0 * dt, 0.0)
+		sinkage_settled = 0.0
 		compression_velocity = (compression - previous_compression) / maxf(dt, 1e-5)
 		wheel_centre = mount - up * (max_ray_length() - spec.radius)
 		contact_normal = up
@@ -106,6 +133,18 @@ func probe(
 
 	contact_point = hit["position"]
 	contact_normal = (hit["normal"] as Vector3).normalized()
+	# Колея. Коллизия рельефа остаётся гладкой — перестраивать её каждый кадр
+	# нельзя, — но точка контакта опускается на поправку от продавленного
+	# песка. Для подвески это неотличимо от настоящей ямы: она и есть настоящая
+	# яма, просто записанная не в меше, а в сетке поправок.
+	track_offset = World.sand.offset(contact_point.x, contact_point.z)
+	ground_looseness = World.sand.looseness(contact_point.x, contact_point.z)
+	# Ограничение не косметическое: между колеёй под одним колесом и бруствером
+	# под соседним набирается перекос, и без потолка машина встаёт на два
+	# колеса там, где в жизни просто качнулась бы.
+	track_offset = clampf(track_offset, -SandField.MAX_DEPTH, SandField.MAX_DEPTH * 0.5)
+	if absf(track_offset) > 0.0005:
+		contact_point.y += track_offset
 	# Расстояние меряем от точки крепления, а не от начала луча.
 	var distance := (mount - contact_point).dot(up)
 	compression = clampf(
@@ -147,6 +186,7 @@ func update_tire(
 		force_longitudinal = 0.0
 		force_lateral = 0.0
 		resistance = 0.0
+		aligning_moment = 0.0
 		slip_ratio = TireModel.relax(slip_ratio, 0.0, 1.0, config.relaxation_length, dt)
 		slip_angle = TireModel.relax(slip_angle, 0.0, 1.0, config.relaxation_length, dt)
 		return
@@ -158,7 +198,14 @@ func update_tire(
 	# Глубже половины радиуса колесо не уходит: дальше в грунт упирается мост, и
 	# это уже не качение, а сидение на брюхе. Без ограничения формула на
 	# предельных нагрузках выдаёт метровую просадку, и машина встаёт намертво.
-	sinkage = minf(TireModel.sinkage(surface, load, patch_area), spec.radius * 0.75)
+	# Взрыхлённый песок держит хуже слежавшегося: там, где уже прошло колесо,
+	# зёрна не упакованы, и следующий проход уходит глубже. Из-за этого второй
+	# круг по своей колее тяжелее первого, а буксование на месте роет яму.
+	var loose_sink := 1.0 + ground_looseness * 0.30
+	sinkage = minf(
+		TireModel.sinkage(surface, load, patch_area) * loose_sink, spec.radius * 0.75
+	)
+	sinkage_settled += (sinkage - sinkage_settled) * (1.0 - exp(-dt / SINKAGE_SETTLE_TAU))
 
 	var wheel_speed := angular_velocity * rolling_radius()
 	var reference := maxf(absf(contact_speed_long), TireModel.CREEP_SPEED)
@@ -179,6 +226,10 @@ func update_tire(
 	# ровном месте, хотя ни нагрузка, ни покрытие, ни износ не поменялись.
 	grip_from_heat = TireModel.temperature_factor(temperature)
 	mu *= grip_from_heat
+	# Рыхлый песок не держит. Коэффициент небольшой намеренно: сцепление здесь
+	# теряется в основном через просадку и сопротивление, а не напрямую, и
+	# если сделать штраф крупным, машина начинает срываться на ровном месте.
+	mu *= 1.0 - ground_looseness * 0.22
 
 	# Развал от хода подвески. Знак зеркальный по бортам: у левого и правого
 	# колеса верх наклоняется в противоположные стороны относительно оси
@@ -193,7 +244,60 @@ func update_tire(
 	)
 	force_longitudinal = forces.x
 	force_lateral = forces.y + TireModel.camber_thrust(camber, load, mu)
+	aligning_moment = TireModel.aligning_moment(
+		slip_angle,
+		force_lateral,
+		TireModel.patch_length(load, pressure, spec.width, spec.radius)
+	)
 	resistance = TireModel.motion_resistance(surface, load, sinkage, pressure)
+	_leave_track(dt, velocity)
+
+
+## Пишет след в песок. Глубина — та, на которую колесо реально просело;
+## рыхлость — от проскальзывания: катящееся колесо уплотняет песок под собой,
+## буксующее его перелопачивает, и разница между этими двумя случаями и есть
+## разница между «проехал» и «закопался».
+func _leave_track(dt: float, velocity: Vector3) -> void:
+	var softness := surface.softness()
+	if softness <= 0.01 or sinkage_settled <= 0.002:
+		return
+	var churn := clampf(absf(slip_ratio) * 0.55 + absf(slip_angle) * 0.5, 0.0, 1.0)
+	var packing := clampf(absf(contact_speed_long) * 0.08, 0.0, 1.0)
+	var loose := clampf(0.12 + churn - packing * 0.1, 0.0, 1.0)
+	# Стоящее колесо не должно бесконечно углублять одну ячейку: в carve
+	# глубина берётся максимумом, но рыхлость копится, и без учёта времени
+	# машина на стоянке за минуту ушла бы по мосты.
+	var rate := clampf(dt * 60.0, 0.0, 1.0)
+	# Рыхлость не переливается сама в себя: если добавлять к новой старую,
+	# получается копилка, из которой она уже не убывает, и песок под стоящей
+	# машиной вечно «свежевзрыхлённый».
+	# Грунт перемещает только работающее колесо — и в этом вся тонкость.
+	#
+	# Стоящее колесо песок под собой уминает, но колею не роет: равновесие,
+	# на котором оно стоит, уже посчитано в sinkage и уже учтено в радиусе
+	# качения. Записать его ещё и в грунт — значит посчитать одну и ту же
+	# просадку дважды, и тогда машина, простоявшая минуту на рыхлом песке,
+	# оказывается в яме по ступицы и не трогается вовсе. Ровно это и
+	# случилось: тест про спущенные колёса показал ноль метров в секунду.
+	#
+	# Работает колесо в двух случаях: катится по новому грунту или срезает
+	# его на месте буксованием. Второе важно не меньше первого — именно так
+	# закапываются, и именно это должно оставлять яму.
+	var rolling := absf(contact_speed_long)
+	var shearing := absf(slip_ratio) * maxf(rolling, TireModel.CREEP_SPEED)
+	var plough := clampf(maxf(rolling, shearing) / 2.5, 0.0, 1.0)
+	# Направление хода нужно, чтобы бруствер ложился вбок и назад, а не под
+	# колесо, которому ещё ехать. Берётся от скорости пятна контакта в плане.
+	var along := Vector2(velocity.x, velocity.z)
+	World.sand.carve(
+		contact_point,
+		spec.width,
+		sinkage_settled,
+		loose * rate,
+		softness,
+		plough,
+		along.normalized() if along.length() > 0.2 else Vector2.ZERO
+	)
 
 
 ## Эффективный радиус качения: меньше номинального на прогиб шины и на
@@ -270,4 +374,22 @@ func is_digging() -> bool:
 		and surface.diggable
 		and absf(slip_ratio) > 1.5
 		and absf(contact_speed_long) < 1.2
+	)
+
+
+## Нагрев и остывание тормозов.
+##
+## Тепло — это работа трения: момент на угловой скорости. Остывание
+## пропорционально перегреву и обдуву, поэтому стоящая машина остывает в разы
+## медленнее едущей — и на светофоре после длинного спуска тормоза продолжают
+## слабеть, хотя ими уже не пользуются.
+func update_brake_heat(applied_torque: float, dt: float) -> void:
+	var work := absf(applied_torque * angular_velocity)
+	# Теплоёмкость всего механизма, Дж/К. Число грубое, но порядок верный:
+	# чугунный диск грузовика — это несколько килограммов металла.
+	var heat_capacity := 14000.0
+	var airflow := 22.0 + absf(contact_speed_long) * 9.0
+	var cooling := (brake_temperature - 35.0) * airflow
+	brake_temperature = clampf(
+		brake_temperature + (work - cooling) / heat_capacity * dt, 10.0, 900.0
 	)

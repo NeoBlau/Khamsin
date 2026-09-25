@@ -29,6 +29,10 @@ var diff_locked: bool = false
 var front_bias: float = 0.38
 
 var throttle_effective: float = 0.0
+## Множитель момента от плотности воздуха. Ставится снаружи — трансмиссия не
+## обязана знать про погоду, а погода про трансмиссию. Днём в пустыне это
+## примерно 0.92, ночью около единицы: разница чувствуется на подъёме.
+var air_factor: float = 1.0
 var clutch_torque: float = 0.0
 var engine_torque: float = 0.0
 var fuel_rate: float = 0.0  ## литров в час
@@ -183,7 +187,7 @@ func _engine_torque(dt: float, input: VehicleInput) -> float:
 
 	throttle_effective = demand
 
-	var torque := config.torque_at(current_rpm) * demand * health
+	var torque := config.torque_at(current_rpm) * demand * health * air_factor
 	# Отсечка: момент срезается не обрывом, а за 300 об/мин до предела.
 	if current_rpm > config.redline_rpm:
 		var over := (current_rpm - config.redline_rpm) / maxf(config.max_rpm - config.redline_rpm, 1.0)

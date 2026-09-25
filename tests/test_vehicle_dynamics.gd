@@ -12,6 +12,12 @@ var truck: VehicleBody
 
 func after_each() -> void:
 	if world != null and is_instance_valid(world):
+		# Снимаем с дерева, а не только ставим в очередь на освобождение:
+		# queue_free срабатывает в конце кадра, и тесты, которые ставят два
+		# заезда подряд, успевают поднять второй стенд поверх первого. Машина
+		# при этом садится на чужую плиту, буксует на ней и никуда не едет —
+		# а выглядит это как «физика сломалась».
+		host.remove_child(world)
 		world.queue_free()
 	world = null
 	truck = null
@@ -21,6 +27,11 @@ func after_each() -> void:
 func _spawn(surface_id: StringName = &"gravel", pressure: float = 2.4) -> void:
 	world = Node3D.new()
 	host.add_child(world)
+	# Все стенды здесь стоят в начале координат, а иные тесты ставят два
+	# заезда подряд. Песок помнит колею, и второй заезд поехал бы по следу
+	# первого: спущенные колёса «переставали помогать», хотя дело было не в
+	# них. Между тестами песок чистит раннер, внутри теста — эта строка.
+	World.sand.clear()
 
 	var ground := StaticBody3D.new()
 	var shape := CollisionShape3D.new()

@@ -14,6 +14,15 @@ signal build_started()
 signal build_finished()
 
 var field: TerrainField
+## Память песка: колея, бруствер и рыхлость поверх неизменного рельефа.
+## Живёт здесь, а не в сцене, потому что к нему обращается физика колеса на
+## каждом такте, и искать его по дереву на 120 Гц — не вариант.
+var sand: SandField = SandField.new()
+## Куда смотреть при выгрузке дальних следов и насколько силён ветер. Ставит
+## игровая сцена; без неё остаются нули, и песок оседает в штиль вокруг центра
+## карты — ровно то, что нужно стенду и тестам.
+var sand_focus: Vector3 = Vector3.ZERO
+var sand_wind: float = 0.0
 var routes: RouteNetwork
 var settlements: Array[Settlement] = []
 var is_ready: bool = false
@@ -31,13 +40,18 @@ const SETTLEMENTS_PATH := "res://data/world/settlements.json"
 
 
 func _ready() -> void:
-	set_process(false)
+	# Процесс включён всегда: раньше он включался только на время сборки мира,
+	# а теперь тут же оседает песок, и выключать его нельзя.
+	set_process(true)
 
 
 ## Запускает сборку мира под сид. По окончании прилетает `build_finished`.
 func build_async(world_seed: int) -> void:
 	if _task_id != -1:
 		return
+	# Новый мир — новый песок. Колея из прошлой поездки в новом сиде оказалась
+	# бы посреди совершенно другого рельефа.
+	sand.clear()
 	is_ready = false
 	built_seed = 0
 	_pending_seed = world_seed
@@ -49,6 +63,7 @@ func build_async(world_seed: int) -> void:
 
 ## Синхронная сборка. Нужна тестам и стенду телеметрии, где ждать кадры незачем.
 func build_now(world_seed: int) -> void:
+	sand.clear()
 	is_ready = false
 	built_seed = 0
 	_pending_seed = world_seed
@@ -63,14 +78,20 @@ func is_built_for(world_seed: int) -> bool:
 	return is_ready and built_seed == world_seed
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	# Песок оседает здесь, а не в игровой сцене, и это не вкусовщина. Колея —
+	# часть физики: пока её не осыпает, она только углубляется, и машина через
+	# минуту стоит в собственной яме по мосты. Раньше релаксацию звала сцена,
+	# и всё, что запускает физику без неё — стенд, тест, замер, — получало
+	# песок, который копит и никогда не отпускает. Поле живёт на этом узле,
+	# значит и такт его — тоже.
+	sand.relax(delta * (1.0 + sand_wind * 0.12), sand_focus)
 	if _task_id == -1:
 		return
 	if not WorkerThreadPool.is_task_completed(_task_id):
 		return
 	WorkerThreadPool.wait_for_task_completion(_task_id)
 	_task_id = -1
-	set_process(false)
 	_finish()
 
 
@@ -150,6 +171,12 @@ func settlement(id: StringName) -> Settlement:
 
 func height(x: float, z: float) -> float:
 	return field.height(x, z) if field != null else 0.0
+
+
+## Высота с учётом следов. Для физики и всего, что должно проваливаться в
+## колею; для стриминга и построек нужна чистая height().
+func height_with_tracks(x: float, z: float) -> float:
+	return height(x, z) + sand.offset(x, z)
 
 
 func height_at(point: Vector3) -> float:

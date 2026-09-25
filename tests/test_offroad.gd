@@ -19,6 +19,9 @@ func before_each() -> void:
 		Rng.set_world_seed(SEED)
 		World.build_now(SEED)
 	GameState.new_game(SEED)
+	# Песок между тестами чистит раннер, но внутри одного теста бывает по
+	# несколько заездов подряд — и второй не должен ехать по колее первого.
+	World.sand.clear()
 	field = World.field
 
 

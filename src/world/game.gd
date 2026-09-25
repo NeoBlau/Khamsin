@@ -12,6 +12,7 @@ const SETTLEMENT_POLL := 0.4
 @export var spawn_override: NodePath
 
 var vehicle: VehicleBody
+var tracks: SandTracks
 var camera: VehicleCamera
 var terrain: TerrainManager
 var sky: SkyController
@@ -155,6 +156,11 @@ func _spawn_vehicle() -> void:
 	grime = Grime.new()
 	vehicle.add_child(grime)
 
+	# Колея, наоборот, остаётся в мире: машина уедет, след нет.
+	tracks = SandTracks.new()
+	add_child(tracks)
+	tracks.attach(vehicle)
+
 	vehicle.global_transform = _spawn_transform()
 	vehicle.refresh_cargo_mass()
 
@@ -177,12 +183,26 @@ func _process(delta: float) -> void:
 	GameState.advance_time(delta / Config.seconds_per_game_hour)
 
 	vehicle.wind_velocity = weather.wind_vector()
+	# Горячий воздух реже, и атмосферный мотор теряет вместе с ним. Днём при
+	# сорока пяти градусах это около восьми процентов момента — на подъёме с
+	# грузом разница заметна на слух раньше, чем на спидометре.
+	vehicle.drivetrain.air_factor = (
+		TireModel.air_density(weather.temperature, vehicle.global_position.y)
+		/ TireModel.AIR_DENSITY_NOMINAL
+	)
 	camera.far = sky.draw_distance()
 
 	# Радио слушают из машины: приём считается от её точки, а не от камеры.
 	var here := walker.global_position if on_foot else vehicle.global_position
 	Audio.radio.listen_from(Vector2(here.x, here.z), GameState.time_of_day)
 	Audio.set_wind(clampf(weather.wind_speed / 22.0, 0.0, 1.0), weather.dust)
+
+	# Оседает песок в самом World: колея — часть физики, и зависеть от того,
+	# поднята ли игровая сцена, она не должна. Отсюда — только чем дышать:
+	# где игрок и насколько силён ветер. В бурю следы исчезают на глазах, и
+	# это единственный случай, когда от неё есть польза.
+	World.sand_focus = here
+	World.sand_wind = weather.wind_speed
 
 	_poll_timer += delta
 	if _poll_timer >= SETTLEMENT_POLL:

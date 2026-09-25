@@ -16,17 +16,28 @@ static func rock(seed_value: int = 1, radius: float = 0.8) -> ArrayMesh:
 	source.rings = 4
 	var arrays := source.get_mesh_arrays()
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed_value
 	# Смещение в основном радиальное: так валун остаётся звёздчатым
 	# относительно центра — каждая грань по-прежнему смотрит наружу, и
 	# пересчитанные нормали не выворачиваются на отдельных вершинах.
 	# Небольшая касательная добавка ломает правильность силуэта.
+	#
+	# Смещение берётся от координат вершины, а не от её номера, и это не
+	# придирка. У сферы Godot шов по долготе и оба полюса — это несколько
+	# вершин в одной и той же точке: они различаются только развёрткой. Сдвиг
+	# по номеру даёт им разные смещения, они разъезжаются, и в камне
+	# открывается щель с ровными краями, сквозь которую видно фон. Снаружи это
+	# выглядит как дырка в камне — тот самый «прозрачный камень», который не
+	# ловился ни проверкой намотки, ни проверкой нормалей: с геометрией всё в
+	# порядке, её просто стало меньше.
 	for i: int in vertices.size():
 		var v := vertices[i]
 		var direction := v.normalized() if v.length_squared() > 0.000001 else Vector3.UP
-		var radial := clampf(rng.randfn(0.0, 0.16), -0.34, 0.34)
-		var tangential := Vector3(rng.randfn(0.0, 0.05), rng.randfn(0.0, 0.035), rng.randfn(0.0, 0.05))
+		var radial := clampf(_position_noise(v, seed_value, 1) * 0.16, -0.34, 0.34)
+		var tangential := Vector3(
+			_position_noise(v, seed_value, 2) * 0.05,
+			_position_noise(v, seed_value, 3) * 0.035,
+			_position_noise(v, seed_value, 4) * 0.05
+		)
 		tangential -= direction * tangential.dot(direction)
 		vertices[i] = v + direction * radial * radius + tangential * radius
 	# Камни в пустыне не шары: ветер и песок сдувают их в приплюснутые глыбы.
@@ -53,6 +64,38 @@ static func rock(seed_value: int = 1, radius: float = 0.8) -> ArrayMesh:
 	material.albedo_color = material.albedo_color.lerp(Color(0.46, 0.42, 0.36), 0.35)
 	mesh.surface_set_material(0, material)
 	return mesh
+
+
+## Детерминированный шум от точки, примерно нормальный, в пределах ±3.
+##
+## Ключевое свойство — не качество распределения, а то, что две вершины в
+## одной и той же координате получают одно и то же число. Шов сферы и полюса
+## как раз такие: вершины разные, точка одна. Считать от номера вершины нельзя
+## (см. rock()), от координат — можно и нужно.
+static func _position_noise(point: Vector3, salt: int, channel: int) -> float:
+	# Квантование до десятой доли миллиметра: совпадающие вершины у сферы
+	# совпадают побитово, но полагаться на это в геометрии не стоит.
+	var h := _mix(int(round(point.x * 10000.0)), int(round(point.y * 10000.0)))
+	h = _mix(h, int(round(point.z * 10000.0)))
+	h = _mix(h, salt)
+	h = _mix(h, channel)
+	# Сумма трёх равномерных даёт колокол — этого для камня достаточно, а
+	# считается втрое дешевле любой честной нормальной величины.
+	var total := 0.0
+	for i: int in 3:
+		h = _mix(h, i + 1)
+		total += float(h & 0xFFFFFF) / 16777216.0 * 2.0 - 1.0
+	return total
+
+
+static func _mix(a: int, b: int) -> int:
+	# splitmix64 в одну итерацию: дёшево и перемешивает достаточно, чтобы
+	# соседние вершины не получали похожие смещения.
+	var h := a * 2 + 1
+	h = (h ^ b) * -7046029254386353131
+	h = h ^ (h >> 29)
+	h = h * -4658895280553007687
+	return h ^ (h >> 32)
 
 
 ## Разворачивает намотку треугольников наружу. Годится для мешей,

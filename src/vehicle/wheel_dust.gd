@@ -96,6 +96,10 @@ func update() -> void:
 	var slipping := absf(wheel.slip_ratio * maxf(rolling, 1.0)) + absf(wheel.contact_speed_lat)
 	var intensity := clampf((rolling * 0.35 + slipping * 0.8) / 14.0, 0.0, 1.0)
 	intensity *= wheel.surface.dust
+	# Из разрытого песка выбивает заметно больше, чем из целины: зёрна уже
+	# подняты и не связаны. Это тот самый шлейф, по которому видно, что колесо
+	# не едет, а гребёт.
+	intensity *= 1.0 + wheel.ground_looseness * 0.9
 	emitting = intensity > 0.03
 	if not emitting:
 		return

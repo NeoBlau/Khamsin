@@ -159,3 +159,51 @@ func test_two_seeds_make_two_different_rocks() -> void:
 		if a[i].is_equal_approx(b[i]):
 			same += 1
 	check(same < a.size() / 2, "разные сиды дают разные камни")
+
+
+## Проверка, которой не хватало, когда камень был дырявым.
+##
+## У сферы Godot шов по долготе и оба полюса — это несколько вершин в одной
+## точке: различаются они только развёрткой. Если сместить их по-разному, они
+## разъезжаются, и в мешe открывается щель с ровными краями. Снаружи это ровно
+## то, на что жаловались: сквозь камень видно фон.
+##
+## Ни намотка, ни нормали этого не ловят — с оставшейся геометрией всё в
+## порядке, её просто стало меньше. Поэтому проверяем прямо: сколько точек
+## было совмещено до смещения, столько и должно остаться после.
+func test_rock_does_not_tear_at_the_seam() -> void:
+	var source := SphereMesh.new()
+	source.radius = 0.8
+	source.height = 0.8 * 1.7
+	source.radial_segments = 7
+	source.rings = 4
+	var original: PackedVector3Array = source.get_mesh_arrays()[Mesh.ARRAY_VERTEX]
+	var before := _distinct_positions(original)
+	check(
+		before < original.size(),
+		"сфера и правда дублирует вершины: %d точек на %d вершин" % [before, original.size()]
+	)
+
+	for seed_value: int in [1, 7, 42, 20260907, 99991, -13]:
+		var mesh := MeshFactory.rock(seed_value, 0.8)
+		var moved: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		check_equal(moved.size(), original.size(), "сид %d: вершин столько же" % seed_value)
+		check_equal(
+			_distinct_positions(moved), before,
+			"сид %d: совмещённые вершины остались совмещёнными" % seed_value
+		)
+
+
+func _distinct_positions(vertices: PackedVector3Array) -> int:
+	var seen: Dictionary = {}
+	for v: Vector3 in vertices:
+		seen[Vector3i(roundi(v.x * 10000.0), roundi(v.y * 10000.0), roundi(v.z * 10000.0))] = true
+	return seen.size()
+
+
+## Камень должен оставаться одинаковым между запусками: он один на всю карту,
+## и «разный камень при каждом входе в игру» заметен сразу.
+func test_rock_is_the_same_every_time() -> void:
+	var first: PackedVector3Array = MeshFactory.rock(42, 0.8).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	var second: PackedVector3Array = MeshFactory.rock(42, 0.8).surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	check_equal(first, second, "один сид — один камень")

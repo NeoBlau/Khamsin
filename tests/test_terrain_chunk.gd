@@ -304,3 +304,49 @@ func test_changing_lod_keeps_the_collision_under_the_wheels() -> void:
 	# А вот когда чанк уезжает из ближнего кольца, коллизию надо убрать.
 	chunk.apply_data(coarse, 4, CELL, null, false)
 	check(not chunk.has_collision, "вдали от игрока коллизия должна сниматься")
+
+
+## Камни на карте рисуются через MultiMesh, а не по одному, и материал им
+## достаётся от меша, а не от узла. Эта развилка ломалась уже дважды: один раз
+## у камня не было материала вовсе, другой — намотка треугольников смотрела
+## внутрь, и отсечение задних граней делало валун насквозь прозрачным. Снаружи
+## оба случая выглядят одинаково — сквозь камень видно фон, — поэтому проверка
+## стоит здесь, на том самом узле, который игрок и видит.
+func test_scattered_rocks_are_solid_where_the_player_sees_them() -> void:
+	world = Node3D.new()
+	host.add_child(world)
+	var rock := MeshFactory.rock(SEED, 0.8)
+	var chunk := TerrainChunk.new()
+	world.add_child(chunk)
+	# Без setup() у чанка нет ни имени, ни узла поверхности, и apply_data
+	# падает на первой же строке, не дойдя до камней.
+	chunk.setup(Vector2i.ZERO, SIZE, null)
+	# Чанк берём не первый попавшийся: в дюнном поле камней нет вовсе, и тест
+	# проверял бы тогда отсутствие узла вместо материала.
+	var data: Dictionary = {}
+	for coordinate: Vector2i in [Vector2i(4, -3), Vector2i(-7, 6), Vector2i(9, 9), Vector2i(0, 0)]:
+		var origin := Vector2(float(coordinate.x) * SIZE, float(coordinate.y) * SIZE)
+		var candidate := TerrainChunk.build_data(field, origin, SIZE, 16, CELL, false, true, SEED)
+		if (candidate["scatter"] as PackedVector3Array).size() >= 2:
+			data = candidate
+			break
+	if not check(not data.is_empty(), "нашёлся чанк с камнями"):
+		return
+	chunk.apply_data(data, 16, CELL, rock, false)
+
+	var scatter: MultiMeshInstance3D = chunk.get_node_or_null("Scatter")
+	if not check(scatter != null, "узел с камнями собрался"):
+		return
+	check(scatter.material_override == null, "узел не перебивает материал меша")
+	check(scatter.multimesh.mesh == rock, "камни рисуются тем самым мешем")
+	check_greater(float(scatter.multimesh.instance_count), 0.0, "камни на месте")
+
+	var material := scatter.multimesh.mesh.surface_get_material(0) as StandardMaterial3D
+	if not check(material != null, "у камня есть материал"):
+		return
+	check(material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED, "камень непрозрачен")
+	check_equal(material.albedo_color.a, 1.0, "альфа полная")
+	# Отсечение задних граней включено — значит вывернутый треугольник дал бы
+	# дыру. Именно поэтому намотка проверяется отдельно и обязана смотреть
+	# наружу: см. test_rock_normals_point_outward_on_any_seed.
+	check_equal(material.cull_mode, BaseMaterial3D.CULL_BACK, "отсечение задних граней на месте")
