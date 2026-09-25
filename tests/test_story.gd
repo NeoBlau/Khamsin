@@ -221,3 +221,140 @@ func test_chapter_data_is_consistent() -> void:
 			var settlement := String((beat.get("when", {}) as Dictionary).get("settlement", ""))
 			if settlement != "":
 				check(known.has(settlement), "бит %s ждёт неизвестный посёлок '%s'" % [beat.get("id"), settlement])
+
+
+# --- Новые главы и дома -----------------------------------------------------
+
+
+## Сюжет ссылается на грузы, посёлки, дома и машины по идентификаторам. Опечатка
+## в любом из них — это сломанный квест, который проявится только у игрока,
+## дошедшего до этой главы.
+func test_story_references_exist() -> void:
+	Catalog.ensure_loaded()
+	Homes.ensure_loaded()
+	var chapters: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string("res://data/story/chapters.json")
+	)
+	var dialogues: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string("res://data/story/dialogues.json")
+	)
+	if not check(chapters is Array and dialogues is Dictionary, "данные сюжета читаются"):
+		return
+
+	var effects: Array[Dictionary] = []
+	for chapter: Variant in chapters as Array:
+		var entry := chapter as Dictionary
+		_collect_effects(entry.get("on_start", {}), effects)
+		for beat: Variant in entry.get("beats", []):
+			_collect_effects((beat as Dictionary).get("then", {}), effects)
+	for key: String in (dialogues as Dictionary):
+		var graph: Dictionary = (dialogues as Dictionary)[key]
+		for node_id: String in graph.get("nodes", {}):
+			var node: Dictionary = graph["nodes"][node_id]
+			_collect_effects(node.get("effects", {}), effects)
+			for choice: Variant in node.get("choices", []):
+				_collect_effects((choice as Dictionary).get("effects", {}), effects)
+
+	check(effects.size() > 8, "последствий в сюжете набралось: %d" % effects.size())
+	for effect: Dictionary in effects:
+		if effect.has("discover"):
+			check(World.settlement(StringName(effect["discover"])) != null,
+				"открываемый посёлок существует: %s" % effect["discover"])
+		if effect.has("give_home"):
+			check(Homes.get_by_id(StringName(effect["give_home"])) != null,
+				"выдаваемый дом существует: %s" % effect["give_home"])
+		if effect.has("unlock_home"):
+			check(Homes.get_by_id(StringName(effect["unlock_home"])) != null,
+				"открываемый дом существует: %s" % effect["unlock_home"])
+		if effect.has("give_vehicle"):
+			check(Catalog.vehicle(StringName(effect["give_vehicle"])) != null,
+				"выдаваемая машина существует: %s" % effect["give_vehicle"])
+		if effect.has("offer_contract"):
+			var spec: Dictionary = effect["offer_contract"]
+			check(Catalog.cargo(StringName(spec.get("cargo", ""))) != null,
+				"груз заказа существует: %s" % spec.get("cargo", ""))
+			for field: String in ["from", "to"]:
+				var id := StringName(spec.get(field, ""))
+				check(World.settlement(id) != null,
+					"посёлок заказа существует: %s = %s" % [field, id])
+
+
+func _collect_effects(source: Variant, into: Array[Dictionary]) -> void:
+	if source is Dictionary and not (source as Dictionary).is_empty():
+		into.append(source as Dictionary)
+
+
+func test_every_home_stands_at_a_real_settlement() -> void:
+	Homes.ensure_loaded()
+	check(Homes.all().size() >= 4, "домов в данных: %d" % Homes.all().size())
+	var seen: Array[StringName] = []
+	for home: Homes.Home in Homes.all():
+		check(not seen.has(home.id), "идентификатор дома не повторяется: %s" % home.id)
+		seen.append(home.id)
+		check(World.settlement(home.settlement) != null,
+			"%s стоит при существующем посёлке: %s" % [home.id, home.settlement])
+		check(home.garage_slots >= 1, "%s: в гараже есть хотя бы одно место" % home.id)
+		check(not home.rooms.is_empty(), "%s: в доме есть комнаты" % home.id)
+		check(home.offset.length() > 10.0, "%s: дом стоит не в центре площади" % home.id)
+
+
+## Гараж должен помнить свою машину между посещениями: он для того и нужен.
+func test_garage_remembers_what_is_parked_in_it() -> void:
+	Homes.ensure_loaded()
+	GameState.new_game(20260907)
+	var home := Homes.all()[0]
+	check(not home.is_owned(), "дом сначала не наш")
+	check(not Homes.store(home.id, &"marshrutka"), "в чужой гараж не поставить")
+
+	Homes.give(home.id)
+	check(home.is_owned(), "дом стал нашим")
+	check_equal(Homes.free_slots(home.id), home.garage_slots, "гараж пуст")
+	check(Homes.store(home.id, &"marshrutka"), "машина встала в гараж")
+	check_equal(Homes.free_slots(home.id), home.garage_slots - 1, "место занято")
+	check_equal(Homes.where_is(&"marshrutka"), home.id, "машина числится здесь")
+
+	# Состояние переживает пересоздание: оно живёт в прохождении, а не в сцене.
+	var snapshot := GameState.serialize()
+	GameState.new_game(20260907)
+	check_equal(Homes.where_is(&"marshrutka"), &"", "в новой игре гараж пуст")
+	GameState.deserialize(snapshot)
+	check_equal(Homes.where_is(&"marshrutka"), home.id, "после загрузки машина на месте")
+
+	check(Homes.take(home.id, &"marshrutka"), "машину забрали")
+	check_equal(Homes.free_slots(home.id), home.garage_slots, "место освободилось")
+
+
+func test_garage_runs_out_of_space() -> void:
+	Homes.ensure_loaded()
+	GameState.new_game(20260907)
+	var small: Homes.Home = null
+	for home: Homes.Home in Homes.all():
+		if home.garage_slots == 1:
+			small = home
+			break
+	if not check(small != null, "есть дом с гаражом на одну машину"):
+		return
+	Homes.give(small.id)
+	check(Homes.store(small.id, &"tabuk_6t"), "первая машина влезла")
+	check(not Homes.store(small.id, &"marshrutka"), "вторая — уже нет")
+	check_equal(Homes.free_slots(small.id), 0, "мест не осталось")
+
+
+## Маршрутка задумана неподходящей для песка, и это должно быть видно в
+## цифрах, а не только в диалоге: задний привод, нет понижайки, нет блокировок.
+func test_the_minibus_is_wrong_for_the_desert() -> void:
+	Catalog.ensure_loaded()
+	var bus := Catalog.vehicle(&"marshrutka")
+	var truck := Catalog.vehicle(&"tabuk_6t")
+	if not check(bus != null and truck != null, "обе машины в каталоге"):
+		return
+	var driven := 0
+	for wheel: VehicleConfig.WheelSpec in bus.wheels:
+		if wheel.driven:
+			driven += 1
+	check_equal(driven, 2, "привод только задний")
+	check_near(bus.transfer_low, 1.0, 0.001, "понижающей передачи нет")
+	check(bus.diff_lock_locked < 0.3, "блокировки нет: %.2f" % bus.diff_lock_locked)
+	check(bus.suspension_travel < truck.suspension_travel, "ход подвески меньше грузовика")
+	check(bus.pressure_min > truck.pressure_min, "колёса нельзя спустить так же низко")
+	check(bus.mass < truck.mass, "и весит меньше")

@@ -1,0 +1,129 @@
+[
+  {
+    "id": "room_mahatta",
+    "name": "Комната над мастерской",
+    "settlement": "mahatta",
+    "offset": [38, -26],
+    "garage_slots": 1,
+    "unlock_flag": "",
+    "price": 0,
+    "description": "Комната, которая досталась вместе с долгом и машиной. Окно выходит на весовую, и в шесть утра под ним разворачиваются.",
+    "rooms": [
+      {
+        "id": "room",
+        "name": "Комната",
+        "size": [6.5, 2.8, 5.5],
+        "props": ["bed", "low_table", "carpet", "shelf"],
+        "doors": ["south"],
+        "windows": ["east"]
+      },
+      {
+        "id": "garage",
+        "name": "Гараж",
+        "size": [7.5, 3.6, 8.0],
+        "at": [7.5, 0, 0],
+        "props": ["workbench", "tool_board", "tyre_stack"],
+        "doors": ["south"],
+        "windows": []
+      }
+    ]
+  },
+  {
+    "id": "shed_bir_saqr",
+    "name": "Сарай у колодца",
+    "settlement": "bir_saqr",
+    "offset": [-44, 30],
+    "garage_slots": 1,
+    "unlock_flag": "home_shed_unlocked",
+    "price": 2800,
+    "description": "Навес, четыре стены и бочка. Хозяин уехал и не вернулся, ключ висел на гвозде снаружи.",
+    "rooms": [
+      {
+        "id": "shed",
+        "name": "Сарай",
+        "size": [8.0, 3.8, 9.0],
+        "props": ["workbench", "crates", "tyre_stack"],
+        "doors": ["south"],
+        "windows": ["west"]
+      }
+    ]
+  },
+  {
+    "id": "house_ain_dhib",
+    "name": "Дом в Айн-Дибе",
+    "settlement": "ain_dhib",
+    "offset": [52, 44],
+    "garage_slots": 2,
+    "unlock_flag": "home_ain_dhib_unlocked",
+    "price": 14500,
+    "description": "Две комнаты, внутренний двор и пальма, которая старше дома. Ночью слышно, как вода идёт по арыку.",
+    "rooms": [
+      {
+        "id": "hall",
+        "name": "Дом — комната",
+        "size": [8.0, 3.2, 7.0],
+        "props": ["carpet", "cushions", "low_table", "tea_set"],
+        "doors": ["south"],
+        "windows": ["east", "west"]
+      },
+      {
+        "id": "garage",
+        "name": "Дом — гараж",
+        "size": [9.0, 4.0, 10.0],
+        "at": [9.0, 0, 0],
+        "props": ["lift", "workbench", "tool_board"],
+        "doors": ["south"],
+        "windows": []
+      }
+    ]
+  },
+  {
+    "id": "villa_oasis",
+    "name": "Домик у воды",
+    "settlement": "wilsacom_oasis",
+    "offset": [-58, -34],
+    "garage_slots": 3,
+    "unlock_flag": "home_oasis_unlocked",
+    "price": 0,
+    "description": "Дядя Валя отдал его со словами «всё равно пустует, а тебе ездить далеко». Из окна видно пруд. Гараж на три машины — он почему-то считает, что это мало.",
+    "rooms": [
+      {
+        "id": "hall",
+        "name": "Домик — комната",
+        "size": [9.0, 3.4, 8.0],
+        "props": ["carpet", "cushions", "low_table", "tv_wall", "tea_set"],
+        "doors": ["south"],
+        "windows": ["north", "east"]
+      },
+      {
+        "id": "garage",
+        "name": "Домик — гараж",
+        "size": [12.0, 4.4, 11.0],
+        "at": [11.0, 0, 0],
+        "props": ["lift", "workbench", "tool_board", "tyre_stack"],
+        "doors": ["south"],
+        "windows": []
+      }
+    ]
+  },
+  {
+    "id": "bunker_qasr",
+    "name": "Бокс на заставе",
+    "settlement": "qasr_rih",
+    "offset": [66, -58],
+    "garage_slots": 2,
+    "unlock_flag": "home_bunker_unlocked",
+    "price": 0,
+    "description": "Бетонный бокс без вывески и без окон. Ключ выдали вместе с маршрутом, который не существует. Свет внутри включается снаружи.",
+    "rooms": [
+      {
+        "id": "box",
+        "name": "Бокс",
+        "size": [10.0, 4.2, 12.0],
+        "props": ["lift", "workbench", "crates", "desk"],
+        "doors": ["south"],
+        "windows": []
+      }
+    ]
+  }
+]

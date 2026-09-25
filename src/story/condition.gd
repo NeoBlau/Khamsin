@@ -11,6 +11,7 @@ const KEYS: PackedStringArray = [
 	"flag", "not_flag", "money_at_least", "money_below", "day_at_least",
 	"deliveries_at_least", "reputation", "chapter", "beat_done", "has_upgrade",
 	"carrying", "settlement", "all", "any", "not",
+	"home_owned", "night", "has_vehicle", "driving", "splats_at_least",
 ]
 
 
@@ -32,6 +33,17 @@ static func evaluate(condition: Variant, context: Dictionary = {}) -> bool:
 		if not _check(key, data[key], context):
 			return false
 	return true
+
+
+static func _player_grime() -> Grime:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return null
+	for node: Node in tree.get_nodes_in_group(&"player_vehicle"):
+		for child: Node in node.get_children():
+			if child is Grime:
+				return child as Grime
+	return null
 
 
 static func _check(key: String, value: Variant, context: Dictionary) -> bool:
@@ -65,6 +77,21 @@ static func _check(key: String, value: Variant, context: Dictionary) -> bool:
 			return false
 		"settlement":
 			return String(context.get("settlement", "")) == String(value)
+		"home_owned":
+			var home := Homes.get_by_id(StringName(value))
+			return home != null and home.is_owned()
+		"night":
+			return GameState.is_night() == bool(value)
+		"has_vehicle":
+			var owned: Array = GameState.flag(&"owned_vehicles", [])
+			return owned.has(String(value)) or String(GameState.vehicle_id) == String(value)
+		"driving":
+			return String(GameState.vehicle_id) == String(value)
+		"splats_at_least":
+			# Верблюжьи плевки на кузове. Сюжет о них знает: Дядя Валя
+			# замечает их раньше, чем здоровается.
+			var grime := _player_grime()
+			return grime != null and grime.splat_count() >= int(value)
 		"all":
 			for entry: Variant in value as Array:
 				if not evaluate(entry, context):

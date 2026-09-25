@@ -3,53 +3,102 @@
     "id": "inheritance",
     "title": "Наследство",
     "objective": "Заработать на первый взнос по долгу и внести его в Махатте",
-    "on_start": { "set_flag": "chapter_inheritance" },
-    "complete_when": { "flag": "debt_first_paid" },
+    "on_start": {
+      "set_flag": "chapter_inheritance"
+    },
+    "complete_when": {
+      "flag": "debt_first_paid"
+    },
     "next": "the_crate",
     "beats": [
       {
         "id": "intro",
-        "when": { "settlement": "mahatta" },
+        "when": {
+          "settlement": "mahatta"
+        },
         "objective": "Зайти на биржу в Махатте и взять заказ",
-        "then": { "dialogue": "intro_dispatcher" }
+        "then": {
+          "dialogue": "intro_dispatcher"
+        }
       },
       {
         "id": "after_first_run",
-        "when": { "all": [{ "flag": "met_dispatcher" }, { "deliveries_at_least": 1 }] },
+        "when": {
+          "all": [
+            {
+              "flag": "met_dispatcher"
+            },
+            {
+              "deliveries_at_least": 1
+            }
+          ]
+        },
         "objective": "Сдать первый груз",
         "then": {
           "dialogue": "after_first_run",
-          "reputation": { "faction": "guild", "amount": 3 }
+          "reputation": {
+            "faction": "guild",
+            "amount": 3
+          }
         }
       },
       {
         "id": "debt_pressure",
-        "when": { "all": [{ "flag": "met_dispatcher" }, { "day_at_least": 4 }] },
-        "then": { "notify": "Гильдия напомнила о взносе. Осталось четыре дня." }
+        "when": {
+          "all": [
+            {
+              "flag": "met_dispatcher"
+            },
+            {
+              "day_at_least": 4
+            }
+          ]
+        },
+        "then": {
+          "notify": "Гильдия напомнила о взносе. Осталось четыре дня."
+        }
       },
       {
         "id": "stranger",
         "when": {
           "all": [
-            { "deliveries_at_least": 2 },
-            { "settlement": "bir_saqr" },
-            { "not_flag": "met_stranger" }
+            {
+              "deliveries_at_least": 2
+            },
+            {
+              "settlement": "bir_saqr"
+            },
+            {
+              "not_flag": "met_stranger"
+            }
           ]
         },
-        "then": { "dialogue": "stranger_offer" }
+        "then": {
+          "dialogue": "stranger_offer"
+        }
       },
       {
         "id": "pay_debt",
         "when": {
           "all": [
-            { "settlement": "mahatta" },
-            { "money_at_least": 6000 },
-            { "flag": "met_dispatcher" },
-            { "not_flag": "debt_first_paid" }
+            {
+              "settlement": "mahatta"
+            },
+            {
+              "money_at_least": 6000
+            },
+            {
+              "flag": "met_dispatcher"
+            },
+            {
+              "not_flag": "debt_first_paid"
+            }
           ]
         },
         "objective": "Собрать 6000 дх и вернуться в Махатту",
-        "then": { "dialogue": "pay_first_instalment" }
+        "then": {
+          "dialogue": "pay_first_instalment"
+        }
       }
     ]
   },
@@ -57,19 +106,312 @@
     "id": "the_crate",
     "title": "Что в ящике",
     "objective": "Разобраться, что везли в ящике без маркировки",
-    "complete_when": { "flag": "crate_resolved" },
-    "next": "",
+    "complete_when": {
+      "flag": "crate_resolved"
+    },
+    "next": "dear_friends",
     "beats": [
       {
         "id": "crate_delivered",
-        "when": { "flag": "crate_delivered" },
+        "when": {
+          "flag": "crate_delivered"
+        },
         "objective": "Довезти ящик до Точки 7",
-        "then": { "dialogue": "crate_aftermath" }
+        "then": {
+          "dialogue": "crate_aftermath"
+        }
       },
       {
         "id": "company_notices",
-        "when": { "all": [{ "flag": "crate_delivered" }, { "settlement": "hufra" }] },
-        "then": { "dialogue": "company_notices" }
+        "when": {
+          "all": [
+            {
+              "flag": "crate_delivered"
+            },
+            {
+              "settlement": "hufra"
+            }
+          ]
+        },
+        "then": {
+          "dialogue": "company_notices"
+        }
+      }
+    ]
+  },
+  {
+    "id": "dear_friends",
+    "title": "Дорогие друзья",
+    "objective": "Разобраться, кто такой Дядя Валя и зачем ему курьер",
+    "on_start": {
+      "set_flag": "chapter_dear_friends",
+      "notify": "На девяносто семи и четырёх кто-то говорит про яблочки"
+    },
+    "complete_when": {
+      "flag": "valya_trusts_you"
+    },
+    "next": "kilometre_forty_two",
+    "beats": [
+      {
+        "id": "heard_on_air",
+        "when": {
+          "all": [
+            {
+              "flag": "crate_resolved"
+            },
+            {
+              "deliveries_at_least": 4
+            }
+          ]
+        },
+        "objective": "Поймать Вилсаком ФМ и доехать до оазиса на девяносто седьмой волне",
+        "then": {
+          "notify": "Вилсаком ФМ, 97.4 — эфир идёт из оазиса в центре карты",
+          "discover": "wilsacom_oasis"
+        }
+      },
+      {
+        "id": "first_visit",
+        "when": {
+          "all": [
+            {
+              "settlement": "wilsacom_oasis"
+            },
+            {
+              "not_flag": "met_valya"
+            }
+          ]
+        },
+        "objective": "Заехать в оазис",
+        "then": {
+          "dialogue": "valya_first_meeting"
+        }
+      },
+      {
+        "id": "the_errand",
+        "when": {
+          "all": [
+            {
+              "flag": "met_valya"
+            },
+            {
+              "not_flag": "apples_run_offered"
+            }
+          ]
+        },
+        "objective": "Съездить в DubaiLux за посылкой Дяди Вали",
+        "then": {
+          "set_flag": "apples_run_offered",
+          "discover": "dubailux",
+          "offer_contract": {
+            "id": "valya_apples_1",
+            "cargo": "shmapple",
+            "units": 6,
+            "from": "dubailux",
+            "to": "wilsacom_oasis",
+            "issuer": "wilsacom",
+            "issuer_name": "Дядя Валя Вилсаком",
+            "payout": 3400,
+            "deposit": 0,
+            "duration_hours": 30
+          }
+        }
+      },
+      {
+        "id": "spat_on",
+        "when": {
+          "all": [
+            {
+              "settlement": "wilsacom_oasis"
+            },
+            {
+              "splats_at_least": 1
+            }
+          ]
+        },
+        "then": {
+          "dialogue": "valya_notices_the_spit"
+        }
+      },
+      {
+        "id": "apples_home",
+        "when": {
+          "all": [
+            {
+              "flag": "apples_delivered"
+            },
+            {
+              "settlement": "wilsacom_oasis"
+            }
+          ]
+        },
+        "objective": "Привезти яблочки в оазис",
+        "then": {
+          "dialogue": "valya_unboxing"
+        }
+      }
+    ]
+  },
+  {
+    "id": "kilometre_forty_two",
+    "title": "Сорок второй километр",
+    "objective": "Понять, что за паллету привезли в DubaiLux на ваше имя",
+    "on_start": {
+      "set_flag": "chapter_km42"
+    },
+    "complete_when": {
+      "flag": "pallet_resolved"
+    },
+    "next": "route_that_does_not_exist",
+    "beats": [
+      {
+        "id": "the_pallet",
+        "when": {
+          "all": [
+            {
+              "flag": "valya_trusts_you"
+            },
+            {
+              "settlement": "dubailux"
+            }
+          ]
+        },
+        "objective": "Забрать паллету в DubaiLux",
+        "then": {
+          "dialogue": "dubailux_pallet"
+        }
+      },
+      {
+        "id": "company_asks",
+        "when": {
+          "all": [
+            {
+              "flag": "pallet_taken"
+            },
+            {
+              "settlement": "qasr_rih"
+            }
+          ]
+        },
+        "objective": "Довезти паллету, не попавшись на досмотр в Каср-Рихе",
+        "then": {
+          "dialogue": "checkpoint_questions"
+        }
+      },
+      {
+        "id": "pallet_home",
+        "when": {
+          "all": [
+            {
+              "flag": "pallet_taken"
+            },
+            {
+              "settlement": "wilsacom_oasis"
+            }
+          ]
+        },
+        "then": {
+          "dialogue": "valya_about_the_pallet"
+        }
+      }
+    ]
+  },
+  {
+    "id": "route_that_does_not_exist",
+    "title": "Маршрут, которого нет",
+    "objective": "Довезти особых гостей туда, куда дорог не проложено",
+    "on_start": {
+      "set_flag": "chapter_route"
+    },
+    "complete_when": {
+      "flag": "route_resolved"
+    },
+    "next": "",
+    "beats": [
+      {
+        "id": "the_offer",
+        "when": {
+          "all": [
+            {
+              "flag": "pallet_resolved"
+            },
+            {
+              "settlement": "qasr_rih"
+            },
+            {
+              "night": true
+            }
+          ]
+        },
+        "objective": "Заехать в Каср-Рих после наступления темноты",
+        "then": {
+          "dialogue": "official_offer"
+        }
+      },
+      {
+        "id": "the_keys",
+        "when": {
+          "flag": "route_accepted"
+        },
+        "objective": "Забрать маршрутку в боксе на заставе",
+        "then": {
+          "give_home": "bunker_qasr",
+          "give_vehicle": "marshrutka",
+          "notify": "Ключи от бокса и от маршрутки. Никаких бумаг."
+        }
+      },
+      {
+        "id": "the_run",
+        "when": {
+          "all": [
+            {
+              "flag": "route_accepted"
+            },
+            {
+              "carrying": "gov_guests"
+            },
+            {
+              "night": true
+            }
+          ]
+        },
+        "objective": "Везти гостей ночью, без фар, не разгоняясь",
+        "then": {
+          "notify": "Пассажиры просят ехать ровнее"
+        }
+      },
+      {
+        "id": "pirate_knows",
+        "when": {
+          "all": [
+            {
+              "flag": "guests_delivered"
+            },
+            {
+              "night": true
+            }
+          ]
+        },
+        "then": {
+          "dialogue": "pirate_broadcast"
+        }
+      },
+      {
+        "id": "tell_or_not",
+        "when": {
+          "all": [
+            {
+              "flag": "guests_delivered"
+            },
+            {
+              "settlement": "wilsacom_oasis"
+            }
+          ]
+        },
+        "objective": "Решить, рассказывать ли Дяде Вале",
+        "then": {
+          "dialogue": "valya_last_word"
+        }
       }
     ]
   }

@@ -134,3 +134,60 @@ func _collect_text(root: Node) -> String:
 			for i: int in tabs.get_tab_count():
 				parts.append(tabs.get_tab_title(i))
 	return "\n".join(parts)
+
+
+## Ни одна клавиша не должна делать двух дел сразу.
+##
+## Проверка появилась после настоящей поломки: добавленные скобки для
+## переключения радиостанций сели на те же клавиши, что и давление в шинах, а
+## выход из машины — на клавишу блокировок. Нажатие делало и то, и другое, и
+## заметить это можно было только случайно.
+func test_no_key_does_two_things_at_once() -> void:
+	# Пары, которые делят клавишу намеренно: в машине и пешком работают разные
+	# наборы действий, и пересечение между ними безвредно.
+	var allowed := [
+		[&"handbrake", &"jump"],
+		[&"clutch", &"sprint"],
+	]
+	var by_key: Dictionary = {}
+	for action: StringName in InputMap.get_actions():
+		if String(action).begins_with("ui_"):
+			continue
+		for event: InputEvent in InputMap.action_get_events(action):
+			if not (event is InputEventKey):
+				continue
+			var code: int = (event as InputEventKey).physical_keycode
+			if code == 0:
+				continue
+			if not by_key.has(code):
+				by_key[code] = [] as Array[StringName]
+			(by_key[code] as Array).append(action)
+
+	var collisions := 0
+	for code: int in by_key:
+		var actions: Array = by_key[code]
+		if actions.size() < 2:
+			continue
+		var excused := false
+		for pair: Array in allowed:
+			if actions.size() == 2 and actions.has(pair[0]) and actions.has(pair[1]):
+				excused = true
+		if excused:
+			continue
+		collisions += 1
+		fail("клавиша %s назначена на %s" % [OS.get_keycode_string(code), actions])
+	check_equal(collisions, 0, "клавиш с двойным назначением")
+
+
+## Действия, на которые код ссылается, обязаны существовать в карте ввода:
+## обращение к несуществующему действию — это ошибка на каждом кадре.
+func test_every_action_the_code_uses_exists() -> void:
+	var used: Array[StringName] = [
+		&"steer_left", &"steer_right", &"throttle", &"brake", &"handbrake", &"clutch",
+		&"shift_up", &"shift_down", &"toggle_4wd", &"toggle_diff_lock", &"toggle_low_range",
+		&"pressure_up", &"pressure_down", &"headlights", &"horn", &"camera_cycle",
+		&"interact", &"open_map", &"open_journal", &"recover", &"pause", &"free_look",
+		&"radio_toggle", &"radio_next", &"radio_prev", &"exit_vehicle", &"sprint", &"jump",
+	]
+	for action: StringName in used:
+		check(InputMap.has_action(action), "действие есть в карте ввода: %s" % action)

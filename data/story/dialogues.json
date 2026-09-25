@@ -32,14 +32,19 @@
         "choices": [
           {
             "text": "Понял.",
-            "effects": { "set_flag": "met_dispatcher" },
+            "effects": {
+              "set_flag": "met_dispatcher"
+            },
             "goto": "last"
           },
           {
             "text": "Разберусь сам.",
             "effects": {
               "set_flag": "met_dispatcher",
-              "reputation": { "faction": "guild", "amount": -1 }
+              "reputation": {
+                "faction": "guild",
+                "amount": -1
+              }
             },
             "goto": "last_dry"
           }
@@ -57,7 +62,6 @@
       }
     }
   },
-
   "after_first_run": {
     "start": "start",
     "nodes": {
@@ -68,7 +72,6 @@
       }
     }
   },
-
   "stranger_offer": {
     "start": "start",
     "nodes": {
@@ -76,11 +79,19 @@
         "speaker": "Человек у колодца",
         "text": "Ты ведь порожняком идёшь на юг? У меня ящик. Небольшой, сто тридцать килограммов, до Точки 7.",
         "choices": [
-          { "text": "Что в нём?", "goto": "what" },
-          { "text": "Сколько?", "goto": "price" },
+          {
+            "text": "Что в нём?",
+            "goto": "what"
+          },
+          {
+            "text": "Сколько?",
+            "goto": "price"
+          },
           {
             "text": "Не вожу то, чего не видел.",
-            "effects": { "set_flag": "met_stranger" },
+            "effects": {
+              "set_flag": "met_stranger"
+            },
             "goto": "refused"
           }
         ]
@@ -97,7 +108,10 @@
           {
             "text": "Беру.",
             "effects": {
-              "set_flag": ["met_stranger", "took_crate"],
+              "set_flag": [
+                "met_stranger",
+                "took_crate"
+              ],
               "money": 1600,
               "offer_contract": {
                 "id": "story_crate",
@@ -111,14 +125,19 @@
                 "expires_in": 120,
                 "issuer": "none",
                 "issuer_name": "Человек у колодца",
-                "flags": ["restricted", "fragile"]
+                "flags": [
+                  "restricted",
+                  "fragile"
+                ]
               }
             },
             "goto": "taken"
           },
           {
             "text": "Обойдусь.",
-            "effects": { "set_flag": "met_stranger" },
+            "effects": {
+              "set_flag": "met_stranger"
+            },
             "goto": "refused"
           }
         ]
@@ -135,7 +154,6 @@
       }
     }
   },
-
   "pay_first_instalment": {
     "start": "start",
     "nodes": {
@@ -145,15 +163,23 @@
         "choices": [
           {
             "text": "Плачу.",
-            "if": { "money_at_least": 6000 },
+            "if": {
+              "money_at_least": 6000
+            },
             "effects": {
               "money": -6000,
               "set_flag": "debt_first_paid",
-              "reputation": { "faction": "guild", "amount": 6 }
+              "reputation": {
+                "faction": "guild",
+                "amount": 6
+              }
             },
             "goto": "paid"
           },
-          { "text": "Ещё не сегодня.", "goto": "later" }
+          {
+            "text": "Ещё не сегодня.",
+            "goto": "later"
+          }
         ]
       },
       "paid": {
@@ -173,7 +199,6 @@
       }
     }
   },
-
   "crate_aftermath": {
     "start": "start",
     "nodes": {
@@ -181,10 +206,16 @@
         "speaker": "Инженер на Точке 7",
         "text": "Приехал. Хорошо. Расписываться не надо, тут не за что расписываться.",
         "choices": [
-          { "text": "Что там было?", "goto": "inside" },
+          {
+            "text": "Что там было?",
+            "goto": "inside"
+          },
           {
             "text": "Деньги.",
-            "effects": { "money": 1600, "set_flag": "crate_resolved" },
+            "effects": {
+              "money": 1600,
+              "set_flag": "crate_resolved"
+            },
             "goto": "paid"
           }
         ]
@@ -200,7 +231,10 @@
         "effects": {
           "money": 2000,
           "set_flag": "crate_resolved",
-          "reputation": { "faction": "nomads", "amount": 4 }
+          "reputation": {
+            "faction": "nomads",
+            "amount": 4
+          }
         },
         "next": ""
       },
@@ -211,7 +245,6 @@
       }
     }
   },
-
   "company_notices": {
     "start": "start",
     "nodes": {
@@ -221,13 +254,21 @@
         "choices": [
           {
             "text": "Возил воду.",
-            "effects": { "reputation": { "faction": "company", "amount": -2 } },
+            "effects": {
+              "reputation": {
+                "faction": "company",
+                "amount": -2
+              }
+            },
             "goto": "lie"
           },
           {
             "text": "Возил. И повезу ещё.",
             "effects": {
-              "reputation": { "faction": "company", "amount": -6 },
+              "reputation": {
+                "faction": "company",
+                "amount": -6
+              },
               "set_flag": "company_hostile"
             },
             "goto": "open"
@@ -243,6 +284,551 @@
         "speaker": "Начальник смены, Хуфра",
         "text": "Уважаю. Работы у нас для тебя больше нет.",
         "next": ""
+      }
+    }
+  },
+  "valya_first_meeting": {
+    "start": "hello",
+    "nodes": {
+      "hello": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Дорогие друзья, всем привет! Ой, простите, это я по привычке. Здравствуйте. Вы к воде или ко мне?",
+        "choices": [
+          {
+            "text": "К воде.",
+            "goto": "water"
+          },
+          {
+            "text": "А кто вы?",
+            "goto": "who"
+          },
+          {
+            "text": "Это вы на девяносто седьмой?",
+            "goto": "radio"
+          }
+        ]
+      },
+      "water": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Вода вон там, бесплатно, сколько увезёте. Я, правда, всё равно расскажу, кто я. Это со мной происходит само.",
+        "next": "who"
+      },
+      "radio": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Я! Передатчик на крыше, антенна из трубы от старого навеса. Слушателей, по моим подсчётам, четверо. Трое из них — верблюды.",
+        "next": "who"
+      },
+      "who": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Валентин. Здесь меня зовут Дядя Валя, и я не возражаю. Живу тут с семьёй, держу воду, мойку и эфир. Раньше занимался техникой. Ну как раньше — я и сейчас ей занимаюсь, просто теперь она приезжает ко мне сама.",
+        "choices": [
+          {
+            "text": "Сама?",
+            "goto": "apples"
+          },
+          {
+            "text": "Держите мойку — в пустыне?",
+            "goto": "wash"
+          }
+        ]
+      },
+      "wash": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Именно в пустыне. Пыль смоет любой. А вот верблюжий плевок водой не берётся — он густой, он въедается, он, извините, живёт. Щётки есть только у меня. Так что рано или поздно все приезжают.",
+        "next": "apples"
+      },
+      "apples": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "На сорок втором километре стоит ангар, называется DubaiLux. Туда приходит всё, что заказывают в эрге. Я заказываю яблочки. Свежие. По документам фрукты, на деле техника, но это, друзья, не шутка, а логистика.",
+        "choices": [
+          {
+            "text": "Съезжу.",
+            "effects": {
+              "set_flag": "met_valya"
+            },
+            "goto": "deal"
+          },
+          {
+            "text": "Почему сами не съездите?",
+            "goto": "why_me"
+          }
+        ]
+      },
+      "why_me": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "У меня эфир в шесть, жена в семь и верблюд, который считает мой двор своим. А вы курьер. Это, знаете ли, разделение труда.",
+        "choices": [
+          {
+            "text": "Ладно, съезжу.",
+            "effects": {
+              "set_flag": "met_valya"
+            },
+            "goto": "deal"
+          }
+        ]
+      },
+      "deal": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Отлично! Только везите аккуратно. Они хрупкие. Все они хрупкие, дорогие друзья, вот в чём беда современной техники.",
+        "effects": {
+          "set_flag": "met_valya",
+          "reputation": {
+            "faction": "nomads",
+            "amount": 2
+          }
+        }
+      }
+    }
+  },
+  "valya_notices_the_spit": {
+    "start": "notice",
+    "nodes": {
+      "notice": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Так. Здравствуйте. У вас на двери верблюд.",
+        "choices": [
+          {
+            "text": "Где?",
+            "goto": "where"
+          },
+          {
+            "text": "Знаю.",
+            "goto": "know"
+          }
+        ]
+      },
+      "where": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Не сам верблюд, а его мнение о вас. Вот это пятно. Водой не пытайтесь, только размажете и обидитесь. Загоняйте на мойку, у меня щётки.",
+        "next": "offer"
+      },
+      "know": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Все знают. Никто не отмывает. Потом приезжают через неделю, когда оно присохло намертво, и удивляются цене.",
+        "next": "offer"
+      },
+      "offer": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Загоняйте под навес, справа. Возьму недорого. И не обижайтесь на него: он тут был раньше нас с вами."
+      }
+    }
+  },
+  "valya_unboxing": {
+    "start": "arrive",
+    "nodes": {
+      "arrive": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Приехали! Целые? Дайте посмотрю. Так... так... Дорогие друзья, у нас распаковка!",
+        "choices": [
+          {
+            "text": "Я не друзья, я один.",
+            "goto": "one"
+          },
+          {
+            "text": "Вы в эфире?",
+            "goto": "onair"
+          }
+        ]
+      },
+      "one": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Это, молодой человек, формат. Формат не меняют из-за количества присутствующих.",
+        "next": "onair"
+      },
+      "onair": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Всегда. Микрофон вон там, на пальме. Не машите ему, он этого не любит.",
+        "next": "open"
+      },
+      "open": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Открываем. Внутри... коробка. Внутри коробки — ещё коробка. Внутри той — вот. Тоньше прошлого. На сколько тоньше, спросите вы? Ни на сколько. Но ощущается иначе.",
+        "choices": [
+          {
+            "text": "Оно работает?",
+            "goto": "works"
+          },
+          {
+            "text": "Зачем вам это здесь?",
+            "goto": "why"
+          }
+        ]
+      },
+      "works": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Три минуты в песке — гарантировано производителем. Я проверял. Производитель не уточнял, что будет на четвёртой.",
+        "next": "thanks"
+      },
+      "why": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "А зачем вам грузовик, на котором вы возите воду людям, которые и так живут у колодца? Мы оба, друг мой, занимаемся не тем, что нужно. Мы занимаемся тем, что интересно.",
+        "next": "thanks"
+      },
+      "thanks": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Держите. И вот ещё что. У воды пустует домик. Гараж на три машины — по-моему, мало, но других нет. Живите. Ездить вам далеко, а спать где-то надо.",
+        "effects": {
+          "set_flag": [
+            "valya_trusts_you",
+            "apples_delivered"
+          ],
+          "give_home": "villa_oasis",
+          "money": 3400,
+          "reputation": {
+            "faction": "nomads",
+            "amount": 6
+          }
+        }
+      }
+    }
+  },
+  "dubailux_pallet": {
+    "start": "counter",
+    "nodes": {
+      "counter": {
+        "speaker": "Приёмщик DubaiLux",
+        "text": "На ваше имя паллета. Двести шестьдесят килограммов. Отправитель не указан.",
+        "choices": [
+          {
+            "text": "Я ничего не заказывал.",
+            "goto": "nobody"
+          },
+          {
+            "text": "Что внутри?",
+            "goto": "inside"
+          }
+        ]
+      },
+      "nobody": {
+        "speaker": "Приёмщик DubaiLux",
+        "text": "Здесь никто ничего не заказывал. Здесь всё просто приезжает. Ваше имя на накладной, накладная у меня, паллета вон там. Дальше решайте сами.",
+        "next": "inside"
+      },
+      "inside": {
+        "speaker": "Приёмщик DubaiLux",
+        "text": "По документам — фруктовая продукция. По весу — не фруктовая продукция. Я расписываюсь за документы, а не за вес.",
+        "choices": [
+          {
+            "text": "Беру.",
+            "effects": {
+              "set_flag": "pallet_taken",
+              "offer_contract": {
+                "id": "km42_pallet",
+                "cargo": "shmapple_pallet",
+                "units": 1,
+                "from": "dubailux",
+                "to": "wilsacom_oasis",
+                "issuer": "wilsacom",
+                "issuer_name": "Без отправителя",
+                "payout": 9800,
+                "deposit": 0,
+                "duration_hours": 40
+              }
+            },
+            "goto": "taken"
+          },
+          {
+            "text": "Пусть лежит.",
+            "goto": "leave"
+          }
+        ]
+      },
+      "taken": {
+        "speaker": "Приёмщик DubaiLux",
+        "text": "Распишитесь. И совет: в Каср-Рихе досматривают всех, кто едет с севера. Формально."
+      },
+      "leave": {
+        "speaker": "Приёмщик DubaiLux",
+        "text": "Полежит. У меня тут коробка стоит четвёртый год, и ничего, никто не умер."
+      }
+    }
+  },
+  "checkpoint_questions": {
+    "start": "stop",
+    "nodes": {
+      "stop": {
+        "speaker": "Досмотр, Каср-Рих",
+        "text": "Куда, откуда, что везём.",
+        "choices": [
+          {
+            "text": "Фрукты.",
+            "goto": "fruit"
+          },
+          {
+            "text": "Не знаю.",
+            "goto": "honest"
+          }
+        ]
+      },
+      "fruit": {
+        "speaker": "Досмотр, Каср-Рих",
+        "text": "Фрукты. Двести шестьдесят килограммов фруктов в плёнке, с гарантийными талонами. Езжайте. Но мы запомним, что вы сказали «фрукты».",
+        "effects": {
+          "reputation": {
+            "faction": "company",
+            "amount": -3
+          },
+          "set_flag": "lied_at_checkpoint"
+        }
+      },
+      "honest": {
+        "speaker": "Досмотр, Каср-Рих",
+        "text": "Честно. Редко. Ладно, езжайте, но в следующий раз спрашивайте у отправителя. У вас, кстати, нет отправителя. Это я тоже запомню.",
+        "effects": {
+          "reputation": {
+            "faction": "company",
+            "amount": 2
+          },
+          "set_flag": "honest_at_checkpoint"
+        }
+      }
+    }
+  },
+  "valya_about_the_pallet": {
+    "start": "look",
+    "nodes": {
+      "look": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Ого. Это не я заказывал. Честное слово, не я. Хотя выглядит как то, что заказал бы я.",
+        "choices": [
+          {
+            "text": "Тогда чьё?",
+            "goto": "whose"
+          },
+          {
+            "text": "Открываем?",
+            "goto": "open"
+          }
+        ]
+      },
+      "whose": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "В эрге есть ровно один способ узнать, чьё что-то. Подождать, пока за ним приедут. Обычно ждать недолго.",
+        "next": "open"
+      },
+      "open": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Открываем. Внутри двадцать штук. Одинаковых. Новых. С наклейками на языке, которого я не знаю. Друзья, я в этом деле двадцать лет, и я вам скажу прямо: так не бывает.",
+        "choices": [
+          {
+            "text": "И что теперь?",
+            "goto": "now"
+          }
+        ]
+      },
+      "now": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Теперь мы ставим её в гараж и делаем вид, что её нет. А вы, если в Каср-Рихе к вам подойдёт человек без фамилии, — выслушайте его. Он всё равно найдёт вас позже.",
+        "effects": {
+          "set_flag": "pallet_resolved",
+          "money": 9800,
+          "reputation": {
+            "faction": "nomads",
+            "amount": 4
+          }
+        }
+      }
+    }
+  },
+  "official_offer": {
+    "start": "approach",
+    "nodes": {
+      "approach": {
+        "speaker": "Человек без фамилии",
+        "voice": "official",
+        "text": "Добрый вечер. Вы ездите по эргу. Нам нужно, чтобы трое доехали из точки, которой нет, в точку, которой тоже нет.",
+        "choices": [
+          {
+            "text": "Я вожу грузы.",
+            "goto": "cargo"
+          },
+          {
+            "text": "Сколько?",
+            "goto": "pay"
+          },
+          {
+            "text": "Нет.",
+            "goto": "refuse"
+          }
+        ]
+      },
+      "cargo": {
+        "speaker": "Человек без фамилии",
+        "voice": "official",
+        "text": "Это и будет груз. Триста килограммов. Не бьётся, но обижается.",
+        "next": "pay"
+      },
+      "pay": {
+        "speaker": "Человек без фамилии",
+        "voice": "official",
+        "text": "Достаточно. Плюс транспорт: пассажирский микроавтобус. Заднеприводный, низкий, для песка не предназначен.",
+        "choices": [
+          {
+            "text": "Для песка не предназначен?",
+            "goto": "why_bus"
+          },
+          {
+            "text": "Согласен.",
+            "effects": {
+              "set_flag": "route_accepted"
+            },
+            "goto": "terms"
+          }
+        ]
+      },
+      "why_bus": {
+        "speaker": "Человек без фамилии",
+        "voice": "official",
+        "text": "Именно. Грузовик в барханах — это грузовик в барханах. Маршрутка в барханах — это ошибка навигации. Ошибки навигации не расследуют.",
+        "choices": [
+          {
+            "text": "Согласен.",
+            "effects": {
+              "set_flag": "route_accepted"
+            },
+            "goto": "terms"
+          },
+          {
+            "text": "Подумаю.",
+            "goto": "refuse"
+          }
+        ]
+      },
+      "terms": {
+        "speaker": "Человек без фамилии",
+        "voice": "official",
+        "text": "Условия. Ночью. Без фар. Ровно. Если вас остановят — вы заблудились. Если спросят про пассажиров — их не было. Бокс на заставе ваш, ключ внутри двери.",
+        "effects": {
+          "reputation": {
+            "faction": "company",
+            "amount": 5
+          }
+        }
+      },
+      "refuse": {
+        "speaker": "Человек без фамилии",
+        "voice": "official",
+        "text": "Разумеется. Мы вернёмся к этому разговору. Вы его не помните."
+      }
+    }
+  },
+  "pirate_broadcast": {
+    "start": "static",
+    "nodes": {
+      "static": {
+        "speaker": "…шипение в эфире",
+        "text": "…если вы это слышите, то вы сейчас едете там, где дорог нет. Мы вас видим. Мы всех видим, у нас тут больше нечем заняться.",
+        "choices": [
+          {
+            "text": "Крутануть настройку дальше.",
+            "goto": "tune"
+          },
+          {
+            "text": "Дослушать.",
+            "goto": "listen"
+          }
+        ]
+      },
+      "tune": {
+        "speaker": "…шипение в эфире",
+        "text": "…бесполезно, мы на всех частотах. Шутка. Мы на одной, просто вы от неё не уезжаете."
+      },
+      "listen": {
+        "speaker": "…шипение в эфире",
+        "text": "Трое в микроавтобусе. Квадрат семнадцать. Квадрата семнадцать не существует — так нам говорят каждый вечер. Мы не спорим. Мы просто передаём музыку тем, кто туда едет.",
+        "effects": {
+          "set_flag": "heard_the_pirates"
+        }
+      }
+    }
+  },
+  "valya_last_word": {
+    "start": "ask",
+    "nodes": {
+      "ask": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Вы на маршрутке. Ночью. С выключенными фарами. И у вас лицо человека, который не хочет об этом говорить.",
+        "choices": [
+          {
+            "text": "Рассказать всё.",
+            "goto": "tell"
+          },
+          {
+            "text": "Соврать про подработку.",
+            "goto": "lie"
+          },
+          {
+            "text": "Промолчать.",
+            "goto": "silence"
+          }
+        ]
+      },
+      "tell": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Так. Хорошо. Я это в эфир не дам — не потому что боюсь, а потому что тогда за вами приедут. Но я запишу. Пусть лежит. У меня много чего лежит.",
+        "effects": {
+          "set_flag": [
+            "route_resolved",
+            "valya_knows"
+          ],
+          "reputation": {
+            "faction": "nomads",
+            "amount": 8
+          },
+          "unlock_home": "house_ain_dhib"
+        }
+      },
+      "lie": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Подработка. Конечно. Друг мой, я двадцать лет читаю по лицам комментарии, которых не написали. Но не хотите — не надо. Чай будете?",
+        "effects": {
+          "set_flag": "route_resolved",
+          "reputation": {
+            "faction": "nomads",
+            "amount": 1
+          }
+        }
+      },
+      "silence": {
+        "speaker": "Дядя Валя Вилсаком",
+        "voice": "valya",
+        "text": "Понял. Тогда я тоже помолчу. Это, между прочим, для меня большая работа.",
+        "effects": {
+          "set_flag": [
+            "route_resolved",
+            "kept_the_secret"
+          ],
+          "reputation": {
+            "faction": "company",
+            "amount": 6
+          }
+        }
       }
     }
   }

@@ -9,6 +9,7 @@ extends RefCounted
 const KEYS: PackedStringArray = [
 	"set_flag", "clear_flag", "money", "reputation", "notify", "dialogue",
 	"offer_contract", "discover", "advance_hours", "damage_cargo", "beat",
+	"unlock_home", "give_home", "give_vehicle", "wash_vehicle",
 ]
 
 
@@ -54,6 +55,42 @@ static func _apply_one(key: String, value: Variant, context: Dictionary) -> void
 				contract.apply_damage(float(value))
 		"beat":
 			EventBus.beat_reached.emit(StringName(value))
+		"unlock_home":
+			Homes.unlock(StringName(value))
+		"give_home":
+			Homes.give(StringName(value))
+		"give_vehicle":
+			_give_vehicle(StringName(value))
+		"wash_vehicle":
+			_wash_vehicle(bool(value))
+
+
+## Отдаёт машину. Она появляется в гараже ближайшего своего дома, а если
+## дома нет — становится текущей: сюжет не должен дарить машину, которую
+## некуда поставить и на которой нельзя уехать.
+static func _give_vehicle(vehicle_id: StringName) -> void:
+	if Catalog.vehicle(vehicle_id) == null:
+		push_warning("Effects: машины '%s' нет в каталоге" % vehicle_id)
+		return
+	var owned: Array = GameState.flag(&"owned_vehicles", [])
+	if not owned.has(String(vehicle_id)):
+		owned.append(String(vehicle_id))
+		GameState.set_flag(&"owned_vehicles", owned)
+	for home: Homes.Home in Homes.owned():
+		if Homes.free_slots(home.id) > 0:
+			Homes.store(home.id, vehicle_id)
+			EventBus.notify("Машина ждёт в гараже: %s" % home.name)
+			return
+	EventBus.notify("Машина ваша, но поставить её негде", &"warning")
+
+
+## Моет машину игрока. Нужно тому единственному моменту в сюжете, где это
+## делает не игрок.
+static func _wash_vehicle(full: bool) -> void:
+	for node: Node in (Engine.get_main_loop() as SceneTree).get_nodes_in_group(&"player_vehicle"):
+		for child: Node in node.get_children():
+			if child is Grime:
+				(child as Grime).wash(full)
 
 
 ## Кладёт сюжетный заказ на доску названного посёлка. Он не генерируется

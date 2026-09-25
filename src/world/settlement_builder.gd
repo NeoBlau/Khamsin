@@ -62,11 +62,87 @@ static func plan(settlement: Settlement) -> Dictionary:
 				lights.append_array(built.get("lights", []) as Array[Node3D])
 		)
 
+	# Дома героя. Стоят там же, где посёлок, но живут своей жизнью: чужой дом
+	# виден снаружи и закрыт, свой — открыт и с гаражом.
+	for home: Homes.Home in Homes.at_settlement(settlement.id):
+		doors.append(_home_entrance(settlement, home))
+		steps.append(func() -> void:
+			var built := _build_home(settlement, home, palette)
+			root.add_child(built["root"])
+			lights.append_array(built.get("lights", []) as Array[Node3D])
+		)
+
 	steps.append(func() -> void: _build_street(root, settlement, street_angle, palette, rng, lights))
 	for step: Callable in _outskirt_steps(root, settlement, rng):
 		steps.append(step)
 
 	return {"root": root, "doors": doors, "lights": lights, "steps": steps}
+
+
+static func _home_entrance(settlement: Settlement, home: Homes.Home) -> Dictionary:
+	var at := Vector3(home.offset.x, 0.0, home.offset.y)
+	at.y = _ground(settlement, at)
+	return {
+		"id": home.id,
+		"kind": &"home",
+		"home": home.id,
+		"name": home.name,
+		"at": at,
+		"facing": 0.0,
+	}
+
+
+## Дом героя. Комнаты берутся из данных, а не выводятся из назначения: у дома
+## их может быть две — жилая и гараж, и гараж должен быть ровно того размера,
+## какой обещан в характеристиках.
+static func _build_home(settlement: Settlement, home: Homes.Home, palette: Color) -> Dictionary:
+	var rooms: Array[BuildingBuilder.Room] = []
+	for spec: Dictionary in home.rooms:
+		var room := BuildingBuilder.Room.new()
+		room.id = StringName(spec.get("id", "room"))
+		room.name = String(spec.get("name", home.name))
+		var size: Array = spec.get("size", [6, 3, 6])
+		room.size = Vector3(float(size[0]), float(size[1]), float(size[2]))
+		var at: Array = spec.get("at", [0, 0, 0])
+		room.centre = Vector3(float(at[0]), float(at[1]), float(at[2])) \
+			+ Vector3(0.0, room.size.y * 0.5, 0.0)
+		var props: Array[StringName] = []
+		for prop: Variant in spec.get("props", []):
+			props.append(StringName(prop))
+		room.props = props
+		var doors: Array[StringName] = []
+		for door: Variant in spec.get("doors", []):
+			doors.append(StringName(door))
+		room.doors = doors
+		var windows: Array[StringName] = []
+		for window: Variant in spec.get("windows", []):
+			windows.append(StringName(window))
+		room.windows = windows
+		# Свет в чужом доме не горит: дом, который ещё не ваш, должен быть
+		# виден как закрытый.
+		room.light_energy = 1.2 if home.is_owned() else 0.0
+		rooms.append(room)
+
+	var built := BuildingBuilder.build(rooms, palette.darkened(0.06))
+	var root: Node3D = built["root"]
+	var at := Vector3(home.offset.x, 0.0, home.offset.y)
+	at.y = _ground(settlement, at)
+	root.position = at
+	root.name = "Home_%s" % home.id
+	_add_roof(root, rooms, palette.darkened(0.06))
+	# Табличка на своём доме и замок на чужом — то, по чему видно разницу
+	# снаружи, не заходя внутрь.
+	var marker := MeshFactory.panel(
+		Vector3(0.34, 0.34, 0.06),
+		Color(0.85, 0.70, 0.38) if home.is_owned() else Color(0.30, 0.28, 0.26),
+		0.6, 0.2, 0.02
+	)
+	if not rooms.is_empty():
+		marker.position = Vector3(
+			rooms[0].size.x * 0.28, 1.9, rooms[0].size.z * 0.5 + 0.2
+		)
+	root.add_child(marker)
+	return built
 
 
 static func _entrance(settlement: Settlement, plot: Dictionary) -> Dictionary:

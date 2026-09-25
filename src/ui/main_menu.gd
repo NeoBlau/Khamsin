@@ -10,13 +10,33 @@ var _slots: VBoxContainer
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = UiTheme.theme()
 
-	var background := ColorRect.new()
-	background.color = Color(0.055, 0.05, 0.055)
-	background.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(background)
+	# Фон меню — та же обложка, что и на заставке. Одна картинка на два
+	# экрана: меню читается продолжением обложки, а не наложением на неё.
+	var art := CoverArt.new()
+	art.seed_value = Rng.world_seed
+	add_child(art)
+
+	# Затемнение слева, чтобы текст меню читался поверх светлого неба.
+	var shade := ColorRect.new()
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var fade := Gradient.new()
+	fade.set_color(0, Color(0.04, 0.035, 0.045, 0.88))
+	fade.set_color(1, Color(0.04, 0.035, 0.045, 0.0))
+	var texture := GradientTexture2D.new()
+	texture.gradient = fade
+	texture.fill_from = Vector2.ZERO
+	texture.fill_to = Vector2(0.62, 0.0)
+	shade.material = null
+	var picture := TextureRect.new()
+	picture.texture = texture
+	picture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	picture.stretch_mode = TextureRect.STRETCH_SCALE
+	add_child(picture)
 
 	var frame := VBoxContainer.new()
 	frame.set_anchors_preset(Control.PRESET_CENTER_LEFT)
@@ -50,8 +70,9 @@ func _ready() -> void:
 	_refresh_slots()
 
 	var hint := Widgets.wrapped(
-		"WASD — газ, тормоз, руль. Пробел — ручник. F — полный привод, G — блокировки,"
-		+ " T — пониженная. Скобки — давление в шинах. M — карта, J — журнал,"
+		"WASD — газ, тормоз, руль. Пробел — ручник. V — полный привод, G — блокировки,"
+		+ " T — пониженная. Скобки — давление в шинах. P — радио, запятая и точка —"
+		+ " станции. X — выйти из машины, F — взаимодействие. M — карта, J — журнал,"
 		+ " C — камера, R — эвакуатор.",
 		13, UiTheme.INK_FAINT
 	)

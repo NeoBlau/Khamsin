@@ -6,6 +6,9 @@ extends Node
 ## мира.
 
 
+const COVER_SCENE := "res://scenes/ui/cover.tscn"
+
+
 func _ready() -> void:
 	Catalog.ensure_loaded()
 	var missing := _validate_data()
@@ -13,7 +16,10 @@ func _ready() -> void:
 		push_error("Boot: не хватает данных — %s" % ", ".join(missing))
 	# Один кадр, чтобы окно успело появиться до смены сцены.
 	await get_tree().process_frame
-	get_tree().change_scene_to_file(SceneRouter.MENU_SCENE)
+	# Заставка показывается один раз за запуск и сама уходит в меню.
+	# Возврат в меню из игры идёт мимо неё: смотреть обложку после каждого
+	# выхода из рейса никто не хочет.
+	get_tree().change_scene_to_file(COVER_SCENE)
 
 
 func _validate_data() -> PackedStringArray:
