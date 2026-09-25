@@ -52,6 +52,10 @@ var patch_area: float = 0.0
 var pressure: float = 2.4
 var wear: float = 0.0
 var temperature: float = 30.0
+## Множитель сцепления от температуры — для приборов и телеметрии.
+var grip_from_heat: float = 1.0
+## Развал колеса, радианы. Отрицательный — верх колеса к машине.
+var camber: float = 0.0
 
 
 
@@ -170,12 +174,25 @@ func update_tire(
 		config.tire_mu, surface.grip, load, config.nominal_load, config.load_sensitivity, wear
 	)
 	mu *= mu_scale
+	# Температура резины. В пустыне это не тонкость: долгий перегон на
+	# скорости выводит шины за сотню градусов, и машина начинает плыть на
+	# ровном месте, хотя ни нагрузка, ни покрытие, ни износ не поменялись.
+	grip_from_heat = TireModel.temperature_factor(temperature)
+	mu *= grip_from_heat
+
+	# Развал от хода подвески. Знак зеркальный по бортам: у левого и правого
+	# колеса верх наклоняется в противоположные стороны относительно оси
+	# машины. Без зеркала тяга от развала на обоих колёсах смотрит в одну
+	# сторону, и машину на прямой постоянно сносит вбок — при том что ни руль,
+	# ни ветер, ни уклон тут ни при чём.
+	var side := signf(spec.position.x)
+	camber = TireModel.camber_from_travel(compression, config.suspension_travel) * side
 
 	var forces := TireModel.forces(
 		slip_ratio, slip_angle, load, mu, config.kappa_peak, config.alpha_peak
 	)
 	force_longitudinal = forces.x
-	force_lateral = forces.y
+	force_lateral = forces.y + TireModel.camber_thrust(camber, load, mu)
 	resistance = TireModel.motion_resistance(surface, load, sinkage, pressure)
 
 

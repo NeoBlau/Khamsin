@@ -237,8 +237,8 @@
       ],
       "range_km": 7.5,
       "transmitter": [
-        4100.0,
-        -6200.0
+        5200.0,
+        -7450.0
       ],
       "talk_chance": 0.7,
       "advert_chance": 0.0,

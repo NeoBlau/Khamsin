@@ -83,11 +83,26 @@ func test_suspension_carries_the_whole_weight() -> void:
 func test_load_shifts_backwards_under_acceleration() -> void:
 	await _spawn()
 	var front_static := truck.wheels[0].load + truck.wheels[1].load
-	await _drive(2.0, 1.0)
-	var front_moving := truck.wheels[0].load + truck.wheels[1].load
+	# Среднее за разгон, а не мгновенное значение в конце. Подвеска грузовика
+	# недодемпфирована по ходу сжатия (так и должно быть), и на переключениях
+	# передач кузов заметно раскачивается по тангажу. Один замер в случайной
+	# фазе этой раскачки может показать что угодно, вплоть до обратного знака.
+	truck.input.throttle = 1.0
+	var total := 0.0
+	var samples := 0
+	for _i: int in 240:
+		await tree().physics_frame
+		total += truck.wheels[0].load + truck.wheels[1].load
+		samples += 1
+	truck.input.throttle = 0.0
+	var front_moving := total / float(samples)
 	check(
 		front_moving < front_static,
 		"при разгоне передняя ось должна разгружаться: %.0f против %.0f" % [front_moving, front_static]
+	)
+	check(
+		front_moving > front_static * 0.5,
+		"но не вставать на дыбы: %.0f против %.0f" % [front_moving, front_static]
 	)
 
 

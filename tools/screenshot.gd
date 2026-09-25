@@ -50,6 +50,9 @@ func _ready() -> void:
 
 	var began := Time.get_ticks_msec()
 	GameState.new_game(_seed)
+	var vehicle_id := _argument("--vehicle", "")
+	if vehicle_id != "":
+		GameState.vehicle_id = StringName(vehicle_id)
 	GameState.time_of_day = _hour
 	World.build_now(_seed)
 	print("мир собран за %d мс" % (Time.get_ticks_msec() - began))

@@ -153,3 +153,57 @@ func test_relaxation_converges_and_survives_standstill() -> void:
 	for _i: int in 600:
 		parked = TireModel.relax(parked, 0.0, 0.0, 0.4, 1.0 / 120.0)
 	check_near(parked, 0.0, 0.01, "на стоящей машине скольжение должно затухать, а не залипать")
+
+
+# --- Температура и развал ---------------------------------------------------
+
+
+## Окно рабочих температур. Холодная резина хуже прогретой, перегретая — ещё
+## хуже, и перегрев дороже недогрева: холодная шина просто жёсткая,
+## перегретая начинает плыть.
+func test_grip_peaks_at_working_temperature() -> void:
+	var cold := TireModel.temperature_factor(20.0)
+	var optimum := TireModel.temperature_factor(TireModel.TEMP_OPTIMUM)
+	var warm := TireModel.temperature_factor(60.0)
+	var hot := TireModel.temperature_factor(130.0)
+	check_near(optimum, 1.0, 0.001, "в оптимуме сцепление полное")
+	check(warm > cold, "прогретая держит лучше холодной: %.3f против %.3f" % [warm, cold])
+	check(warm < optimum, "но всё же не на пике")
+	check(hot < cold, "перегрев хуже недогрева: %.3f против %.3f" % [hot, cold])
+	for t: float in [-20.0, 0.0, 30.0, 82.0, 120.0, 200.0]:
+		var value := TireModel.temperature_factor(t)
+		check(value > 0.3 and value <= 1.0, "%.0f°: множитель %.3f в разумных пределах" % [t, value])
+
+
+func test_overheating_is_a_real_loss() -> void:
+	# Перегрев должен быть заметен, иначе механика не работает: разница в
+	# пару процентов не заставит никого сбросить скорость.
+	var fresh := TireModel.temperature_factor(85.0)
+	var cooked := TireModel.temperature_factor(140.0)
+	check(cooked < fresh * 0.82, "перегретая теряет заметно: %.3f против %.3f" % [cooked, fresh])
+
+
+## Развал: ноль на середине хода, отрицательный при сжатии.
+func test_camber_follows_suspension_travel() -> void:
+	var travel := 0.32
+	check_near(TireModel.camber_from_travel(travel * 0.5, travel), 0.0, 0.0001,
+		"на середине хода развал нулевой")
+	check(TireModel.camber_from_travel(travel * 0.9, travel) < 0.0, "при сжатии — отрицательный")
+	check(TireModel.camber_from_travel(travel * 0.1, travel) > 0.0, "на отбое — положительный")
+	check_near(TireModel.camber_from_travel(0.2, 0.0), 0.0, 0.0001, "нулевой ход не делит на ноль")
+	for compression: float in [-0.5, 0.0, 0.16, 0.32, 0.9]:
+		var camber := TireModel.camber_from_travel(compression, travel)
+		check(absf(camber) < 0.2, "развал остаётся в разумных пределах: %.3f" % camber)
+
+
+func test_camber_thrust_is_bounded() -> void:
+	var load := 10000.0
+	var mu := 1.0
+	check_near(TireModel.camber_thrust(0.0, load, mu), 0.0, 0.0001, "без развала тяги нет")
+	check(TireModel.camber_thrust(0.06, load, mu) > 0.0, "положительный развал тянет вправо")
+	check(TireModel.camber_thrust(-0.06, load, mu) < 0.0, "отрицательный — влево")
+	# Тяга от развала — поправка, а не основная сила: она не должна спорить с
+	# уводом, иначе машина поедет боком без руля.
+	var peak := TireModel.forces(0.0, 0.14, load, mu, 0.14, 0.14).y
+	check(absf(TireModel.camber_thrust(0.15, load, mu)) < absf(peak) * 0.35,
+		"тяга от развала заметно меньше силы от увода")

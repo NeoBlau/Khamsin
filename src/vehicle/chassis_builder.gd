@@ -32,6 +32,8 @@ const TAIL_COLOUR := Color(0.55, 0.10, 0.08)
 ##   paint      — панели, на которые ложится грязь;
 ##   tail_lamps — задние фонари.
 static func build(config: VehicleConfig) -> Dictionary:
+	if config.body_style == &"van":
+		return VanBuilder.build(config)
 	var size := config.body_size
 	var offset := config.body_offset
 	var chassis := Node3D.new()
@@ -264,7 +266,8 @@ static func build(config: VehicleConfig) -> Dictionary:
 		tail_lamps.append(tail)
 
 	# --- Кабина изнутри ---------------------------------------------------
-	var cabin := CabinBuilder.build(config)
+	var volume := CabinBuilder.truck_volume(config)
+	var cabin := CabinBuilder.build(config, volume[0], volume[1])
 	chassis.add_child(cabin["root"])
 
 	# --- Колёса -----------------------------------------------------------

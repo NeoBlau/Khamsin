@@ -140,3 +140,80 @@ func _all_children(node: Node) -> Array[Node]:
 		out.append(child)
 		out.append_array(_all_children(child))
 	return out
+
+
+# --- Маршрутка --------------------------------------------------------------
+
+
+func _built_van() -> Dictionary:
+	Catalog.ensure_loaded()
+	return ChassisBuilder.build(Catalog.vehicle(&"marshrutka"))
+
+
+## Фургон должен собираться фургоном, а не грузовиком с высокой будкой.
+func test_the_van_gets_its_own_body() -> void:
+	var van := Catalog.vehicle(&"marshrutka")
+	check_equal(van.body_style, &"van", "стиль кузова задан в данных")
+	var built := _built_van()
+	check((built["paint"] as Array).size() > 3, "у фургона есть окрашиваемые панели")
+	check_equal((built["headlights"] as Array).size(), 2, "две фары")
+	_release(built)
+
+
+## Колёса не должны оказаться внутри кузова: габаритная коробка фургона
+## начинается на уровне пола салона, то есть выше осей. Если задать её ниже,
+## снаружи колёс просто не будет видно, и понять причину по коду нельзя.
+func test_the_van_body_clears_the_wheels() -> void:
+	var van := Catalog.vehicle(&"marshrutka")
+	var bottom := van.body_offset.y - van.body_size.y * 0.5
+	var axle := van.wheels[0].position.y
+	var radius := van.wheels[0].radius
+	check(bottom > axle + radius * 0.2,
+		"низ кузова выше осей: %.2f против %.2f" % [bottom, axle])
+	check(bottom - (axle - radius) > 0.25,
+		"дорожный просвет осмысленный: %.2f м" % (bottom - (axle - radius)))
+
+
+## Ничто не должно висеть выше крыши. Именно так проявлялась кабина,
+## посчитанная от габаритов грузовика: над фургоном парил тёмный лист.
+func test_nothing_floats_above_the_van_roof() -> void:
+	var van := Catalog.vehicle(&"marshrutka")
+	var built := _built_van()
+	var roof := van.body_offset.y + van.body_size.y * 0.5
+	var highest := -1000.0
+	for entry: Array in _placed_meshes(built["chassis"], Transform3D.IDENTITY):
+		var mesh: MeshInstance3D = entry[0]
+		var box: AABB = (entry[1] as Transform3D) * mesh.get_aabb()
+		highest = maxf(highest, box.position.y + box.size.y)
+	check(highest < roof + 0.35,
+		"самая высокая деталь на %.2f, крыша на %.2f" % [highest, roof])
+	_release(built)
+
+
+## Посадка водителя одинаково разумна в обеих машинах: руль ниже глаз и на
+## расстоянии вытянутой руки, а не у лица.
+func test_driving_position_works_in_both_vehicles() -> void:
+	Catalog.ensure_loaded()
+	for id: StringName in [&"tabuk_6t", &"marshrutka"]:
+		var built := ChassisBuilder.build(Catalog.vehicle(id))
+		var cabin: Dictionary = built["cabin"]
+		var eye: Node3D = cabin["eye"]
+		var wheel: Node3D = cabin["wheel"]
+		var back := eye.position.z - wheel.position.z
+		var up := eye.position.y - wheel.position.y
+		check(back > 0.4 and back < 1.0, "%s: до руля %.2f м" % [id, back])
+		check(up > 0.25 and up < 0.65, "%s: глаза выше обода на %.2f м" % [id, up])
+		check(eye.position.x < 0.0, "%s: руль левый" % id)
+		_release(built)
+
+
+func _placed_meshes(node: Node, parent: Transform3D) -> Array:
+	var out: Array = []
+	for child: Node in node.get_children():
+		if not (child is Node3D):
+			continue
+		var here: Transform3D = parent * (child as Node3D).transform
+		if child is MeshInstance3D:
+			out.append([child, here])
+		out.append_array(_placed_meshes(child, here))
+	return out

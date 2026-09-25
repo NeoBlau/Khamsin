@@ -30,6 +30,11 @@ class WheelSpec extends RefCounted:
 ## Центр масс относительно начала координат кузова.
 @export var center_of_mass: Vector3 = Vector3(0.0, -0.25, 0.05)
 ## Габариты кузова для меша и коллизии: ширина, высота, длина.
+## Каким кузовом машина рисуется: `truck` — бортовой с платформой,
+## `van` — цельный фургон с салоном. На физику не влияет вовсе: габариты,
+## масса и подвеска берутся из своих полей, и силуэт обязан им следовать,
+## а не наоборот.
+@export var body_style: StringName = &"truck"
 @export var body_size: Vector3 = Vector3(2.1, 1.35, 5.4)
 ## Смещение центра коробки кузова относительно начала координат. Начало
 ## координат совпадает с точками крепления подвески, поэтому кузов приходится
@@ -204,6 +209,7 @@ static func from_dict(data: Dictionary) -> VehicleConfig:
 	var body: Dictionary = data.get("body", {})
 	c.mass = float(body.get("mass", c.mass))
 	c.center_of_mass = _vec3(body.get("center_of_mass"), c.center_of_mass)
+	c.body_style = StringName(body.get("style", "truck"))
 	c.body_size = _vec3(body.get("size"), c.body_size)
 	c.body_offset = _vec3(body.get("offset"), c.body_offset)
 	c.inertia = _vec3(body.get("inertia"), c.inertia)

@@ -25,6 +25,7 @@ var on_foot: bool = false
 var grime: Grime
 var camels: CamelHerd
 var places: SettlementManager
+var eggs: EasterEggs
 
 var _loading: Control
 var _poll_timer: float = 0.0
@@ -78,6 +79,11 @@ func _on_world_built() -> void:
 	places.name = "Places"
 	add_child(places)
 	places.begin(vehicle)
+
+	eggs = EasterEggs.new()
+	eggs.name = "Finds"
+	add_child(eggs)
+	eggs.begin(vehicle)
 
 	cargo = CargoMonitor.new()
 	cargo.name = "CargoMonitor"
